@@ -1,4 +1,3 @@
-kubectl apply -f - <<EOF
 apiVersion: networking.istio.io/v1alpha3
 kind: VirtualService
 metadata:
@@ -19,4 +18,4 @@ spec:
         port:
           number: 8000
         host: httpbin
-EOF
+
