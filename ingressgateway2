@@ -31,4 +31,4 @@ spec:
         port:
           number: 8000
         host: httpbin
-EOF
+
