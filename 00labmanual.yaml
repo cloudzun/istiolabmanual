@@ -197,7 +197,7 @@ export SOURCE_POD=$(kubectl get pod -l app=sleep -o jsonpath={.items..metadata.n
 
 查看出站访问效果
 kubectl exec -it $SOURCE_POD -c sleep -- curl http://httpbin.org/headers
-	
+
 关闭默认出站访问
 istioctl install  --set meshConfig.outboundTrafficPolicy.mode=REGISTRY_ONLY -y
 
