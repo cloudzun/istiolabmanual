@@ -87,6 +87,7 @@ echo $GATEWAY_URL
 echo http://$GATEWAY_URL/productpage
 
  
+ 
 Lab 3 服务路由和流量管理
 
 
@@ -119,7 +120,6 @@ nano samples/bookinfo/networking/virtual-service-reviews-test-v2.yaml
 清理环境
 kubectl delete -f samples/bookinfo/networking/virtual-service-all-v1.yaml
 kubectl delete -f samples/bookinfo/networking/virtual-service-reviews-test-v2.yaml
-
 
 
 2. 流量转移
