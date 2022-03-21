@@ -1,0 +1,480 @@
+Lab 1 Istio环境的安装
+
+下载Istio
+curl -L https://istio.io/downloadIstio | sh -
+
+如果因为特殊的国情，导致上一步失败，使用这个步骤：
+wget https://chengzhstor.blob.core.windows.net/k8slab/istio-1.13.2-linux-amd64.tar.gz
+tar xf istio-1.13.2-linux-amd64.tar.gz
+
+进入下载目录，随着产品的迭代，此处的版本号可能不同，请大家依据屏幕提示进行后两步操作
+cd istio-1.13.2/
+
+设置环境变量
+export PATH="$PATH:/root/istio-1.13.2/bin"
+
+检查安装前提条件
+istioctl verify-install
+
+执行安装
+istioctl manifest apply --set profile=demo
+ 
+安装仪表板：
+kubectl apply -f samples/addons
+
+检查 istio 安装版本：
+istioctl version
+
+查看 crd：
+kubectl get crd | grep istio
+
+查看 api 资源：
+kubectl api-resources | grep istio
+
+查看命名空间：
+kubectl get namespaces 
+
+查看 istio 相关pod：
+kubectl get pods -n istio-system
+
+查看 istio 服务状态：
+kubectl get svc -n istio-system 
+
+查看各组件状态：
+kubectl get svc,pod,hpa,pdb,Gateway,VirtualService -n istio-system
+
+加载实验脚本目录
+git clone https://github.com/cloudzun/istiolabmanual
+ 
+
+
+Lab 2 Bookinfo 示例程序安装
+
+Bookinfo 是 Istio 社区官方推荐的示例应用之一。它可以用来演示多种 Istio 的特性，并且它是一个异构的微服务应用。
+本章节大部分实验都和bookinfo有关，因此熟练 快速 准确地部署bookinfo是捣鼓istio重要基本功。
+
+启动自动注入sidecar
+kubectl label namespace default istio-injection=enabled
+
+安装 bookinfo
+kubectl apply -f samples/bookinfo/platform/kube/bookinfo.yaml
+
+确认服务和 pod状态
+kubectl get svc
+
+kubectl get pod
+ 
+此处需要等待大概2分钟，等到所有的pod都ready再进行下一步
+
+检查sidecar自动注入
+kubectl describe pod productpage-v1-7d6cfb7dfd-2nlj9
+  *重点关注Container部分和Events部分
+
+检查productpage页面访问
+kubectl exec -it $(kubectl get pod -l app=ratings -o jsonpath='{.items[0].metadata.name}') -c ratings -- curl productpage:9080/productpage | grep -o "<title>.*</title>"
+
+启动默认网关
+kubectl apply -f samples/bookinfo/networking/bookinfo-gateway.yaml
+
+使用默认目标规则
+kubectl apply -f samples/bookinfo/networking/destination-rule-all.yaml
+
+针对productpage启用nodeport，并确认对外访问路径和端口
+export INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="http2")].nodePort}')
+export SECURE_INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="https")].nodePort}')
+export GATEWAY_URL=$INGRESS_HOST:$INGRESS_PORT
+echo $GATEWAY_URL
+echo http://$GATEWAY_URL/productpage
+
+ 
+Lab 3 服务路由和流量管理
+
+
+1.动态路由
+（可选）启用默认目标规则
+kubectl apply -f samples/bookinfo/networking/destination-rule-all.yaml
+
+查看目标规则
+nano samples/bookinfo/networking/destination-rule-all.yaml
+
+创建将review流量都指向v1虚拟服务
+kubectl apply -f samples/bookinfo/networking/virtual-service-all-v1.yaml
+
+查看该虚拟服务
+nano samples/bookinfo/networking/virtual-service-all-v1.yaml
+ 
+这个配置文件明确定义了任何情况下只呈现v1版本的reviews
+使用浏览器查看效果,	即使反复F5，也是无星星版
+
+创建将登录用户的review流量都指向v2的虚拟服务
+kubectl apply -f  samples/bookinfo/networking/virtual-service-reviews-test-v2.yaml
+
+Jason同志应该可以看到黑星星
+
+查看该虚拟服务
+nano samples/bookinfo/networking/virtual-service-reviews-test-v2.yaml
+ 
+使用浏览器以jason登陆查看效果
+ 
+清理环境
+kubectl delete -f samples/bookinfo/networking/virtual-service-all-v1.yaml
+kubectl delete -f samples/bookinfo/networking/virtual-service-reviews-test-v2.yaml
+
+
+
+2. 流量转移
+
+（可选）启用默认目标规则
+kubectl apply -f samples/bookinfo/networking/destination-rule-all.yaml
+
+使用浏览器查看页面效果，主要是关注reviews的版本
+
+将所有流量指向reviews:v1
+kubectl apply -f samples/bookinfo/networking/virtual-service-all-v1.yaml
+ 
+使用浏览器查看页面效果，主要是关注reviews的版本
+
+将50% 的流量从 reviews:v1 转移到 reviews:v3
+kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-50-v3.yaml
+
+查看该虚拟服务
+nano samples/bookinfo/networking/virtual-service-reviews-50-v3.yaml
+
+使用浏览器查看页面效果，主要是关注reviews的版本
+
+将 100% 的流量路由到 reviews:v3
+kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-v3.yaml
+
+查看该虚拟服务
+nano samples/bookinfo/networking/virtual-service-reviews-v3.yaml
+
+使用浏览器查看页面效果，主要是关注reviews的版本
+
+清理
+kubectl delete -f samples/bookinfo/networking/virtual-service-all-v1.yaml
+
+
+3. 网关
+
+查看现有网关
+kubectl get gw
+
+增加网关
+kubectl apply -f istiolabmanual/gateway.yaml 
+
+查看现有网关
+kubectl get gw
+
+查看该网关配置
+kubectl describe gw test-gateway
+
+增加虚拟服务
+kubectl apply -f istiolabmanual/virtualservice.yaml
+
+查看虚拟服务
+kubectl get vs
+
+查看该虚拟服务配置
+kubectl describe vs test-gateway
+
+随后使用浏览器访问/details/0 和 /health，检查效果
+  
+清理环境
+kubectl delete -f istiolabmanual/gateway.yaml 
+kubectl delete -f istiolabmanual/virtualservice.yaml
+
+
+4. 服务入口
+
+安装sleep应用
+kubectl apply -f samples/sleep/sleep.yaml
+
+查看pod
+kubectl  get pod 
+
+设置source_pod 变量
+export SOURCE_POD=$(kubectl get pod -l app=sleep -o jsonpath={.items..metadata.name})
+
+查看出站访问效果
+kubectl exec -it $SOURCE_POD -c sleep -- curl http://httpbin.org/headers
+	
+关闭默认出站访问
+istioctl install  --set meshConfig.outboundTrafficPolicy.mode=REGISTRY_ONLY -y
+
+查看出站访问效果
+kubectl exec -it $SOURCE_POD -c sleep -- curl http://httpbin.org/headers
+
+创建指向 httpbin.org 的ServiceEntry
+kubectl apply -f istiolabmanual/serviceentry.yaml
+
+查看ServiceEntry
+kubectl get se
+
+稍等数秒钟之后，再次查看出站访问效果
+kubectl exec -it $SOURCE_POD -c sleep -- curl http://httpbin.org/ip
+
+查看该ServiceEntry配置
+kubectl describe se httpbin-ext
+ 
+清理
+kubectl delete -f samples/sleep/sleep.yaml
+kubectl delete -f istiolabmanual/serviceentry.yaml
+istioctl install --set profile=demo -y
+
+
+5. Ingress
+
+创建httpbin服务
+kubectl apply -f samples/httpbin/httpbin.yaml
+
+查看pod 
+kubectl get pods
+
+查看ingressgateway
+kubectl get svc istio-ingressgateway -n istio-system
+
+设置ingress主机变量
+export INGRESS_HOST=127.0.0.1
+
+创建ingress gateway，定义接入点 
+kubectl apply -f  istiolabmanual/ingressgateway.yaml 
+  
+创建virtual service 定义路由规则 
+kubectl apply -f istiolabmanual/ingressvs.yaml 
+ 
+查看Virtual Service信息，重点关注服务 网关和主机的绑定关系
+kubectl get vs
+
+访问已发布的httpin 接口
+curl -I -HHost:httpbin.example.com http://$INGRESS_HOST:$INGRESS_PORT/status/200
+ 
+curl -I -HHost:httpbin.example.com http://$INGRESS_HOST:$INGRESS_PORT/delay/2
+ 
+访问未经定义的目标
+curl -I -HHost:httpbin.example.com http://$INGRESS_HOST:$INGRESS_PORT/headers
+
+设置规则将headers服务发布到外网 
+kubectl apply -f istiolabmanual/ingressgateway2.yaml 
+ 
+使用浏览器加 /headers 在外网进行访问
+  
+查看Virtual Service信息，重点关注服务 网关和主机的绑定关系
+kubectl get vs
+
+清理资源
+kubectl delete gateway httpbin-gateway
+kubectl delete virtualservice httpbin
+kubectl delete --ignore-not-found=true -f samples/httpbin/httpbin.yaml
+ 
+
+6. Egress
+
+查看istio 系统服务，确认egress gateway 组件正常运行
+kubectl get svc -n istio-system
+
+查看istio 系统pod
+kubectl get pod -n istio-system
+ 
+安装sleep应用
+kubectl apply -f samples/sleep/sleep.yaml
+ 
+设置source_pod 变量
+export SOURCE_POD=$(kubectl get pod -l app=sleep -o jsonpath={.items..metadata.name})
+ 
+为外部httpbin服务创建service entry
+kubectl  apply -f  istiolabmanual/egressse.yaml 
+ 
+检查Service Entry
+kubectl get se
+
+从sleep上访问外网
+kubectl exec -it $SOURCE_POD -c sleep -- curl http://httpbin.org/ip
+ 
+检查sidecar里的proxy日志
+kubectl logs $SOURCE_POD -c istio-proxy | tail
+ 
+注意观察，此处的upstream_cluster："outbound|80||httpbin.org"
+
+查看Virtual Service 和 Destination Rule信息
+kubectl get vs
+
+kubectl get dr
+
+创建egress gateway
+kubectl  apply -f  istiolabmanual/egressgw.yaml 
+ 
+查看gateway
+kubectl get gw
+ 
+创建virtual service，将流量引导到egress gateway
+kubectl  apply -f  istiolabmanual/egressvs.yaml 
+ 
+查看Virtual Service 和Destination Rule信息
+kubectl get vs
+kubectl get dr
+
+从sleep上访问外网
+kubectl exec -it $SOURCE_POD -c sleep -- curl http://httpbin.org/ip
+ 	注意：此处的ip地址发生了变化
+
+检查sidecar里的proxy日志，观察新的条目
+kubectl logs $SOURCE_POD -c istio-proxy | tail
+  
+注意观察，启用了egress gateway之后此处的upstream_cluster："outbound|80|httpbin|istio-egressgateway.istio-system.svc.cluster.local"
+
+清理
+kubectl delete -f samples/sleep/sleep.yaml
+kubectl delete -f  istiolabmanual/egressse.yaml 
+kubectl delete -f istiolabmanual/egressgw.yaml
+kubectl delete -f istiolabmanual/egressvs.yaml 
+
+
+
+Lab 4 弹性能力
+
+
+1. 超时重试
+
+（可选）加载default destination rules.
+kubectl apply -f samples/bookinfo/networking/destination-rule-all.yaml
+ 
+将review指向v2版本
+kubectl apply -f istiolabmanual/reviewsv2.yaml 
+
+查看bookinfo页面，看黑星星
+
+给ratings 服务添加延迟
+kubectl apply -f istiolabmanual/delay.yaml 
+
+查看bookinfo页面观察延迟
+  会观察到页面需要大约2s才能加载完成 
+ 
+给reviews 服务添加超时策略
+kubectl apply -f istiolabmanual/timeout.yaml 
+
+查看bookinfo页面观察快速失败
+  延时设置为2s，但是我们的超时是1s，所以就可耻地失败了
+
+给ratings 服务添加重试策略
+kubectl apply -f istiolabmanual/retry.yaml 
+ 	
+从bookinfo页面上刷新一次，查看日志看是否有两次重试
+kubectl logs -f ratings-v1-xxxxx -c istio-proxy
+
+注意观察日志中的两个条目的path和start_time
+
+清理
+kubectl delete -f samples/bookinfo/networking/virtual-service-all-v1.yaml
+
+
+2. 熔断
+
+部署httpin服务
+kubectl apply -f samples/httpbin/httpbin.yaml
+ 
+在服务的DestinationRule 中添加熔断设置
+kubectl apply -f istiolabmanual/circuitbreaking.yaml 
+ 
+查看DestinationRule 
+kubectl describe dr httpbin 
+
+安装测试工具
+kubectl apply -f samples/httpbin/sample-client/fortio-deploy.yaml
+ 
+查看正常访问结果
+FORTIO_POD=$(kubectl get pods -lapp=fortio -o 'jsonpath={.items[0].metadata.name}')
+kubectl exec -it "$FORTIO_POD"  -c fortio -- /usr/bin/fortio load -curl http://httpbin:8000/get
+ 
+触发熔断  2个并发，执行20次
+kubectl exec -it "$FORTIO_POD"  -c fortio -- /usr/bin/fortio load -c 2 -qps 0 -n 20 -loglevel Warning http://httpbin:8000/get
+ 
+触发熔断 again 3个并发，执行30次
+kubectl exec -it "$FORTIO_POD"  -c fortio -- /usr/bin/fortio load -c 3 -qps 0 -n 30 -loglevel Warning http://httpbin:8000/get
+ 
+查看熔断指标
+kubectl exec "$FORTIO_POD" -c istio-proxy -- pilot-agent request GET stats | grep httpbin | grep pending
+ 	overflow即是被熔断的访问次数
+
+清理
+kubectl delete destinationrule httpbin
+kubectl delete deploy httpbin fortio-deploy
+kubectl delete svc httpbin fortio
+
+ 
+
+Lab 5 调试
+
+
+1. 故障注入
+
+启用路由策略
+kubectl apply -f samples/bookinfo/networking/virtual-service-all-v1.yaml
+kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-test-v2.yaml
+ 
+分别使用匿名用户和jason查看bookinfo界面
+  Jason同学黑星星
+  普通群众无星星
+ 
+注入延时故障
+kubectl apply -f samples/bookinfo/networking/virtual-service-ratings-test-delay.yaml
+ 
+分别使用匿名用户和jason查看bookinfo界面
+ Jason 踩坑了 
+ 普通群众情绪稳定
+
+注入异常中断故障
+kubectl apply -f samples/bookinfo/networking/virtual-service-ratings-test-abort.yaml
+ 
+分别使用匿名用户和jason查看bookinfo界面 
+  Jason 中招 
+  普通群众没事
+ 
+清理环境
+kubectl delete -f samples/bookinfo/networking/virtual-service-all-v1.yaml
+
+
+2. 流量镜像
+
+创建httpbin-v1 和 httpbin-v2
+kubectl apply -f istiolabmanual/httpbin-v1.yaml  
+kubectl apply -f istiolabmanual/httpbin-v2.yaml 
+
+发布服务
+kubectl apply -f istiolabmanual/httpbinsvc.yaml
+
+启动sleep服务
+kubectl apply -f samples/sleep/sleep.yaml
+
+设置路由规则
+kubectl apply -f istiolabmanual/httpbinvs.yaml 
+ 
+使用sleep访问服务
+export SLEEP_POD=$(kubectl get pod -l app=sleep -o jsonpath={.items..metadata.name})
+kubectl exec -it $SLEEP_POD -c sleep -- sh -c 'curl  http://httpbin:8000/headers' | python3 -m json.tool
+ 
+查看v1和v2的日志
+export V1_POD=$(kubectl get pod -l app=httpbin,version=v1 -o jsonpath={.items..metadata.name})
+kubectl logs -f $V1_POD -c httpbin
+
+export V2_POD=$(kubectl get pod -l app=httpbin,version=v2 -o jsonpath={.items..metadata.name})
+kubectl logs -f $V2_POD -c httpbin
+ 
+设置镜像规则
+kubectl apply -f istiolabmanual/mirror.yaml --validate=false
+
+使用sleep访问服务
+export SLEEP_POD=$(kubectl get pod -l app=sleep -o jsonpath={.items..metadata.name})
+kubectl exec -it $SLEEP_POD -c sleep -- sh -c 'curl  http://httpbin:8000/headers' | python3 -m json.tool
+ 
+查看v1和v2的日志
+export V1_POD=$(kubectl get pod -l app=httpbin,version=v1 -o jsonpath={.items..metadata.name})
+kubectl logs -f $V1_POD -c httpbin
+
+export V2_POD=$(kubectl get pod -l app=httpbin,version=v2 -o jsonpath={.items..metadata.name})
+kubectl logs -f $V2_POD -c httpbin
+ 
+清理
+kubectl delete virtualservice httpbin
+kubectl delete destinationrule httpbin
+kubectl delete deploy httpbin-v1 httpbin-v2 sleep
+kubectl delete svc httpbin 
