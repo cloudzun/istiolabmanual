@@ -478,3 +478,223 @@ kubectl delete virtualservice httpbin
 kubectl delete destinationrule httpbin
 kubectl delete deploy httpbin-v1 httpbin-v2 sleep
 kubectl delete svc httpbin 
+
+
+
+Lab 6 验证：配置TLS安全网关
+
+
+1. 为单Host配置 TLS ingress gateway
+
+创建根证书和为证书签名的私钥
+openssl req -x509 -sha256 -nodes -days 365 -newkey rsa:2048 -subj '/O=example Inc./CN=example.com' -keyout example.com.key -out example.com.crt
+
+为httpbin.example.com创建证书和私钥：
+openssl req -out httpbin.example.com.csr -newkey rsa:2048 -nodes -keyout httpbin.example.com.key -subj "/CN=httpbin.example.com/O=httpbin organization"
+openssl x509 -req -sha256 -days 365 -CA example.com.crt -CAkey example.com.key -set_serial 0 -in httpbin.example.com.csr -out httpbin.example.com.crt
+
+启动 httpbin 用例
+kubectl apply -f istiolabmanual/sdshttpbin.yaml 
+
+为ingress gateway创建 secret
+kubectl create -n istio-system secret tls httpbin-credential --key=httpbin.example.com.key --cert=httpbin.example.com.crt
+
+创建 Gateway ，可以打开 yaml文件重点关注servers以及TLS部分的定义
+kubectl apply -f istiolabmanual/sdsgateway.yaml
+
+配置网关的ingress traffic routes 定义相应的虚拟服务
+kubectl apply -f istiolabmanual/sdsvirtualserver.yaml 
+
+发送HTTPS请求访问httpbin服务
+curl -v -HHost:httpbin.example.com --resolve "httpbin.example.com:$SECURE_INGRESS_PORT:$INGRESS_HOST" \
+--cacert example.com.crt "https://httpbin.example.com:$SECURE_INGRESS_PORT/status/418"
+    此处应该有茶壶
+
+回滚日志查看 TSL 握手过程
+
+删除网关的secret并创建一个新 secret以更改ingress gateway的凭据
+kubectl -n istio-system delete secret httpbin-credential
+
+mkdir new_certificates
+openssl req -x509 -sha256 -nodes -days 365 -newkey rsa:2048 -subj '/O=example Inc./CN=example.com' -keyout new_certificates/example.com.key -out new_certificates/example.com.crt
+openssl req -out new_certificates/httpbin.example.com.csr -newkey rsa:2048 -nodes -keyout new_certificates/httpbin.example.com.key -subj "/CN=httpbin.example.com/O=httpbin organization"
+openssl x509 -req -sha256 -days 365 -CA new_certificates/example.com.crt -CAkey new_certificates/example.com.key -set_serial 0 -in new_certificates/httpbin.example.com.csr -out new_certificates/httpbin.example.com.crt
+kubectl create -n istio-system secret tls httpbin-credential \
+--key=new_certificates/httpbin.example.com.key \
+--cert=new_certificates/httpbin.example.com.crt
+
+使用新证书进行访问
+curl -v -HHost:httpbin.example.com --resolve "httpbin.example.com:$SECURE_INGRESS_PORT:$INGRESS_HOST" \
+--cacert new_certificates/example.com.crt "https://httpbin.example.com:$SECURE_INGRESS_PORT/status/418"
+    此处还是有茶壶
+
+尝试使用旧证书访问
+curl -v -HHost:httpbin.example.com --resolve "httpbin.example.com:$SECURE_INGRESS_PORT:$INGRESS_HOST" \
+--cacert example.com.crt "https://httpbin.example.com:$SECURE_INGRESS_PORT/status/418"
+    吃瘪
+
+
+2.为多Host配置TLS ingress gateway
+
+重新创建httpbin凭据
+kubectl -n istio-system delete secret httpbin-credential
+kubectl create -n istio-system secret tls httpbin-credential \
+--key=httpbin.example.com.key \
+--cert=httpbin.example.com.crt
+
+启用helloworld-v1样例
+kubectl apply -f istiolabmanual/helloworld-v1.yaml
+
+为helloworld-v1.example.com创建证书和私钥：
+openssl req -out helloworld-v1.example.com.csr -newkey rsa:2048 -nodes -keyout helloworld-v1.example.com.key -subj "/CN=helloworld-v1.example.com/O=helloworld organization"
+openssl x509 -req -sha256 -days 365 -CA example.com.crt -CAkey example.com.key -set_serial 1 -in helloworld-v1.example.com.csr -out helloworld-v1.example.com.crt
+
+创建helloworld-credential secret
+kubectl create -n istio-system secret tls helloworld-credential --key=helloworld-v1.example.com.key --cert=helloworld-v1.example.com.crt
+
+创建指向两个服务的gateway
+kubectl apply -f istiolabmanual/mygatewayv1.yaml
+
+创建helloworld-v1的vs
+kubectl apply -f istiolabmanual/helloworld-v1vs.yaml
+
+向v1发起访问
+curl -v -HHost:helloworld-v1.example.com --resolve "helloworld-v1.example.com:$SECURE_INGRESS_PORT:$INGRESS_HOST" \
+--cacert example.com.crt "https://helloworld-v1.example.com:$SECURE_INGRESS_PORT/hello"
+    此处收获HTTP/2 200
+
+向httpbin.example.com发起访问
+curl -v -HHost:httpbin.example.com --resolve "httpbin.example.com:$SECURE_INGRESS_PORT:$INGRESS_HOST" \
+--cacert example.com.crt "https://httpbin.example.com:$SECURE_INGRESS_PORT/status/418"
+    此处还是有茶壶
+
+
+3.配置交互TLS ingress gateway
+
+更新证书
+kubectl -n istio-system delete secret httpbin-credential
+kubectl create -n istio-system secret generic httpbin-credential --from-file=tls.key=httpbin.example.com.key \
+--from-file=tls.crt=httpbin.example.com.crt --from-file=ca.crt=example.com.crt
+
+把mygateway切换到mutual模式
+kubectl apply -f istiolabmanual/mygatewayv2.yaml
+
+
+尝试使用之前的方式进行访问
+curl -v -HHost:httpbin.example.com --resolve "httpbin.example.com:$SECURE_INGRESS_PORT:$INGRESS_HOST" \
+--cacert example.com.crt "https://httpbin.example.com:$SECURE_INGRESS_PORT/status/418"
+    吃瘪
+
+生成新的客户端证书和私钥
+openssl req -out client.example.com.csr -newkey rsa:2048 -nodes -keyout client.example.com.key -subj "/CN=client.example.com/O=client organization"
+openssl x509 -req -sha256 -days 365 -CA example.com.crt -CAkey example.com.key -set_serial 1 -in client.example.com.csr -out client.example.com.crt
+
+向httpbin.example.com发起访问
+curl -v -HHost:httpbin.example.com --resolve "httpbin.example.com:$SECURE_INGRESS_PORT:$INGRESS_HOST" \
+--cacert example.com.crt --cert client.example.com.crt --key client.example.com.key \
+"https://httpbin.example.com:$SECURE_INGRESS_PORT/status/418"
+    此处还是有茶壶
+
+清理环境
+kubectl delete gateway mygateway
+kubectl delete virtualservice httpbin
+kubectl delete --ignore-not-found=true -n istio-system secret httpbin-credential \
+helloworld-credential
+kubectl delete --ignore-not-found=true virtualservice helloworld-v1
+
+rm -rf example.com.crt example.com.key httpbin.example.com.crt httpbin.example.com.key httpbin.example.com.csr helloworld-v1.example.com.crt helloworld-v1.example.com.key helloworld-v1.example.com.csr client.example.com.crt client.example.com.csr client.example.com.key ./new_certificates
+
+kubectl delete deployment --ignore-not-found=true httpbin helloworld-v1
+kubectl delete service --ignore-not-found=true httpbin helloworld-v1
+
+
+
+Lab 8 认证：为应用生成双向TLS
+
+创建两个名称空间foo和bar，并在它们两个上部署httpbin 和 sleep 并启用sidecar注入：
+kubectl create ns foo
+kubectl apply -f <(istioctl kube-inject -f samples/httpbin/httpbin.yaml) -n foo
+kubectl apply -f <(istioctl kube-inject -f samples/sleep/sleep.yaml) -n foo
+kubectl create ns bar
+kubectl apply -f <(istioctl kube-inject -f samples/httpbin/httpbin.yaml) -n bar
+kubectl apply -f <(istioctl kube-inject -f samples/sleep/sleep.yaml) -n bar
+
+创建另一个 legacy 名称空间，不启用sidecar注入的情况下部署sleep：
+kubectl create ns legacy
+kubectl apply -f samples/httpbin/httpbin.yaml -n legacy
+kubectl apply -f samples/sleep/sleep.yaml -n legacy
+
+查看这三个名称空间的相互访问情况
+for from in "foo" "bar" "legacy"; do for to in "foo" "bar"; do kubectl exec $(kubectl get pod -l app=sleep -n ${from} -o jsonpath={.items..metadata.name}) -c sleep -n ${from} -- curl http://httpbin.${to}:8000/ip -s -o /dev/null -w "sleep.${from} to httpbin.${to}: %{http_code}\n"; done; done
+  两两互通，和谐
+
+检查authentication policies 和 destination rules
+kubectl get peerauthentication --all-namespaces
+
+kubectl get destinationrule --all-namespaces
+
+在整个网格上启用PERMISSIVE模式的认证策略
+kubectl apply -n istio-system -f istiolabmanual/mtlspermissive.yaml 
+
+查看这三个名称空间的相互访问情况
+for from in "foo" "bar" "legacy"; do for to in "foo" "bar"; do kubectl exec $(kubectl get pod -l app=sleep -n ${from} -o jsonpath={.items..metadata.name}) -c sleep -n ${from} -- curl http://httpbin.${to}:8000/ip -s -o /dev/null -w "sleep.${from} to httpbin.${to}: %{http_code}\n"; done; done
+  还是很和谐，因为策略比较宽松
+
+在整个网格上启用STRICT模式的认证策略
+kubectl  apply -n istio-system -f istiolabmanual/mtlsstrict.yaml 
+
+查看这三个名称空间的相互访问情况
+for from in "foo" "bar" "legacy"; do for to in "foo" "bar"; do kubectl exec $(kubectl get pod -l app=sleep -n ${from} -o jsonpath={.items..metadata.name}) -c sleep -n ${from} -- curl http://httpbin.${to}:8000/ip -s -o /dev/null -w "sleep.${from} to httpbin.${to}: %{http_code}\n"; done; done
+  策略一旦收紧，legacy 被发现是裸泳的了，悲剧
+
+重建legacy 名称空间的服务，请启用sidecar注入
+kubectl apply -f <(istioctl kube-inject -f samples/httpbin/httpbin.yaml) -n legacy
+kubectl apply -f <(istioctl kube-inject -f samples/sleep/sleep.yaml) -n legacy
+
+查看这三个名称空间的相互访问情况
+for from in "foo" "bar" "legacy"; do for to in "foo" "bar"; do kubectl exec $(kubectl get pod -l app=sleep -n ${from} -o jsonpath={.items..metadata.name}) -c sleep -n ${from} -- curl http://httpbin.${to}:8000/ip -s -o /dev/null -w "sleep.${from} to httpbin.${to}: %{http_code}\n"; done; done
+  注入sidecar之后，legacy又可以和小伙伴们一起玩耍了
+
+清理
+kubectl delete peerauthentication --all-namespaces –all
+kubectl delete ns foo bar legacy
+
+
+
+Lab 9 授权：实现JWT身份的认证和授权
+
+创建包含 httpbin 和sleep样例的名称空间foo
+kubectl create ns foo
+kubectl apply -f <(istioctl kube-inject -f samples/httpbin/httpbin.yaml) -n foo
+kubectl apply -f <(istioctl kube-inject -f samples/sleep/sleep.yaml) -n foo
+
+检查httpbin和sleep的通讯情况
+kubectl exec $(kubectl get pod -l app=sleep -n foo -o jsonpath={.items..metadata.name}) -c sleep -n foo -- curl http://httpbin.foo:8000/ip -s -o /dev/null -w "%{http_code}\n"
+  一切正常，本来就是by default的吗
+
+为httpbin创建 request authentication policy
+kubectl apply -f istiolabmanual/jwtra.yaml
+
+检查持有无效JWT的访问
+kubectl exec $(kubectl get pod -l app=sleep -n foo -o jsonpath={.items..metadata.name}) -c sleep -n foo -- curl "http://httpbin.foo:8000/headers" -s -o /dev/null -H "Authorization: Bearer invalidToken" -w "%{http_code}\n"
+  理应不能访问，401没毛病
+
+检查不持有JWT的访问， 
+kubectl exec $(kubectl get pod -l app=sleep -n foo -o jsonpath={.items..metadata.name}) -c sleep -n foo -- curl "http://httpbin.foo:8000/headers" -s -o /dev/null -w "%{http_code}\n"
+  这居然也能成功，尴尬
+
+在foo上启用 authorization policy
+kubectl apply -f istiolabmanual/jwtap.yaml 
+
+设置指向JWT的Token变量
+TOKEN=$(curl https://raw.githubusercontent.com/istio/istio/release-1.5/security/tools/jwt/samples/demo.jwt -s) && echo $TOKEN | cut -d '.' -f2 - | base64 --decode -
+
+使用有效JWT进行访问
+kubectl exec $(kubectl get pod -l app=sleep -n foo -o jsonpath={.items..metadata.name}) -c sleep -n foo -- curl "http://httpbin.foo:8000/headers" -s -o /dev/null -H "Authorization: Bearer $TOKEN" -w "%{http_code}\n"
+
+再次验证不持有JWT的访问
+kubectl exec $(kubectl get pod -l app=sleep -n foo -o jsonpath={.items..metadata.name}) -c sleep -n foo -- curl "http://httpbin.foo:8000/headers" -s -o /dev/null -w "%{http_code}\n"
+  授权策略启用之后，就没办法浑水摸鱼了，403了
+
+清理环境
+kubectl delete namespace foo
