@@ -698,3 +698,36 @@ kubectl exec $(kubectl get pod -l app=sleep -n foo -o jsonpath={.items..metadata
 
 清理环境
 kubectl delete namespace foo
+
+
+
+
+kubectl patch svc -n istio-system prometheus -p '{"spec":{"type": "NodePort"}}'
+kubectl patch service prometheus --namespace=istio-system --type='json' --patch='[{"op": "replace", "path": "/spec/ports/0/nodePort", "value":31120}]'
+
+kubectl patch svc -n istio-system grafana  -p '{"spec":{"type": "NodePort"}}'
+kubectl patch service grafana --namespace=istio-system --type='json' --patch='[{"op": "replace", "path": "/spec/ports/0/nodePort", "value":31121}]'
+
+kubectl patch svc -n istio-system tracing -p '{"spec":{"type": "NodePort"}}'
+kubectl patch service tracing --namespace=istio-system --type='json' --patch='[{"op": "replace", "path": "/spec/ports/0/nodePort", "value":31122}]'
+
+kubectl patch svc -n istio-system kiali -p '{"spec":{"type": "NodePort"}}'
+kubectl patch service kiali --namespace=istio-system --type='json' --patch='[{"op": "replace", "path": "/spec/ports/0/nodePort", "value":31123}]'
+
+
+
+清理整个环境
+
+清理 Bookinfo
+samples/bookinfo/platform/kube/cleanup.sh
+
+卸载istio
+kubectl delete -f samples/addons
+istioctl manifest generate --set profile=demo | kubectl delete --ignore-not-found=true -f -
+    Istio 卸载程序按照层次结构逐级的从 istio-system 命令空间中删除 RBAC 权限和所有资源。对于不存在的资源报错，可以安全的忽略掉，毕竟他们已经被分层的删除了。
+
+删除命名空间 istio-system 
+kubectl delete namespace istio-system
+
+指示 Istio 自动注入 Envoy 边车代理的标签默认也不删除。 不需要的时候，使用下面命令删掉它。
+kubectl label namespace default istio-injection-
