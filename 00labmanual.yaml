@@ -722,7 +722,17 @@ kubectl patch service kiali --namespace=istio-system --type='json' --patch='[{"o
 压测脚本
 while true; do curl http://node3:30329/productpage; done  
 
+仪表板组件打开方式
+prometheus: http://node1:31120/
 
+grafana: http://node1:31121/
+
+tracing: http://node1:31122/
+
+kiali: http://node1:31123/
+
+操作过程可参见
+https://zhuanlan.zhihu.com/p/141775176 
 
 清理整个环境
 
