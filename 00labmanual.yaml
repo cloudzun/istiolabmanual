@@ -701,7 +701,12 @@ kubectl delete namespace foo
 
 
 
+Lab 10 监控
 
+安装仪表板：
+kubectl apply -f samples/addons
+
+开放监控工具的NotePort端口
 kubectl patch svc -n istio-system prometheus -p '{"spec":{"type": "NodePort"}}'
 kubectl patch service prometheus --namespace=istio-system --type='json' --patch='[{"op": "replace", "path": "/spec/ports/0/nodePort", "value":31120}]'
 
@@ -713,6 +718,9 @@ kubectl patch service tracing --namespace=istio-system --type='json' --patch='[{
 
 kubectl patch svc -n istio-system kiali -p '{"spec":{"type": "NodePort"}}'
 kubectl patch service kiali --namespace=istio-system --type='json' --patch='[{"op": "replace", "path": "/spec/ports/0/nodePort", "value":31123}]'
+
+压测脚本
+while true; do curl http://node3:30329/productpage; done  
 
 
 
