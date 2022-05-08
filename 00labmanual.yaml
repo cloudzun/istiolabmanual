@@ -233,8 +233,11 @@ kubectl get pods
 查看ingressgateway
 kubectl get svc istio-ingressgateway -n istio-system
 
-设置ingress主机变量
-export INGRESS_HOST=127.0.0.1
+设置ingress端口
+export INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="http2")].nodePort}')
+export SECURE_INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="https")].nodePort}')
+export TCP_INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="tcp")].nodePort}')
+
 
 创建ingress gateway，定义接入点 
 kubectl apply -f  istiolabmanual/ingressgateway.yaml 
