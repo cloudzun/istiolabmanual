@@ -238,6 +238,8 @@ export INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway -
 export SECURE_INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="https")].nodePort}')
 export TCP_INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="tcp")].nodePort}')
 
+设置ingress主机
+export INGRESS_HOST=$(kubectl get po -l istio=ingressgateway -n istio-system -o jsonpath='{.items[0].status.hostIP}')
 
 创建ingress gateway，定义接入点 
 kubectl apply -f  istiolabmanual/ingressgateway.yaml 
