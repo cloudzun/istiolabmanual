@@ -708,6 +708,45 @@ kubectl delete namespace foo
 
 Lab 10 监控
 
+模拟一次页面访问,为了防止被不必要的katacode页面元素“污染“，我们最好从内部用命令行执行一次curl访问
+kubectl get svc
+
+curl http://10.109.209.72:9080/productpage
+
+查看istio proxy日志
+kubectl get pods
+
+kubectl logs -f productpage-xxx istio-proxy
+ 
+观察到两个outbond条目，分别指向details和reviews，还有一个inbound条目，指向productpage
+
+为获取更多信息，设置日志以JSON格式显式
+istioctl manifest apply --set profile=demo --set values.meshConfig.accessLogFile="/dev/stdout" --set values.meshConfig.accessLogEncoding=JSON
+
+（可选）查看日志设置
+kubectl describe configmap istio -n istio-system | less
+  配置文件有以下输出
+  accessLogEncoding: JSON
+  accessLogFile: /dev/stdout
+
+再次查看istio proxy日志
+kubectl logs -f productpage-xxx istio-proxy
+
+分别指向details和reviews 的outbound条目
+{"downstream_remote_address":"10.40.0.12:41654","authority":"details:9080","path":"/details/0","protocol":"HTTP/1.1","upstream_service_time":"9","upstream_local_address":"10.40.0.12:48508","duration":"15","upstream_transport_failure_reason":"-","route_name":"default","downstream_local_address":"10.99.18.67:9080","user_agent":"curl/7.47.0","response_code":"200","response_flags":"-","start_time":"2020-05-15T06:30:26.459Z","method":"GET","request_id":"e2de9f03-38ac-924d-ae2b-176d868c56ab","upstream_host":"10.40.0.8:9080","x_forwarded_for":"-","requested_server_name":"-","bytes_received":"0","istio_policy_status":"-","bytes_sent":"178","upstream_cluster":"outbound|9080||details.default.svc.cluster.local"}
+
+{"upstream_cluster":"outbound|9080||reviews.default.svc.cluster.local","downstream_remote_address":"10.40.0.12:43866","authority":"reviews:9080","path":"/reviews/0","protocol":"HTTP/1.1","upstream_service_time":"1786","upstream_local_address":"10.40.0.12:36048","duration":"1787","upstream_transport_failure_reason":"-","route_name":"default","downstream_local_address":"10.98.163.167:9080","user_agent":"curl/7.47.0","response_code":"200","response_flags":"-","start_time":"2020-05-15T06:30:26.480Z","method":"GET","request_id":"e2de9f03-38ac-924d-ae2b-176d868c56ab","upstream_host":"10.40.0.11:9080","x_forwarded_for":"-","requested_server_name":"-","bytes_received":"0","istio_policy_status":"-","bytes_sent":"379"}
+
+指向productpage的inbound条目
+{"upstream_cluster":"inbound|9080|http|productpage.default.svc.cluster.local","downstream_remote_address":"10.32.0.1:40938","authority":"10.109.209.72:9080","path":"/productpage","protocol":"HTTP/1.1","upstream_service_time":"1839","upstream_local_address":"127.0.0.1:51264","duration":"1840","upstream_transport_failure_reason":"-","route_name":"default","downstream_local_address":"10.40.0.12:9080","user_agent":"curl/7.47.0","response_code":"200","response_flags":"-","start_time":"2020-05-15T06:30:26.446Z","method":"GET","request_id":"e2de9f03-38ac-924d-ae2b-176d868c56ab","upstream_host":"127.0.0.1:9080","x_forwarded_for":"-","requested_server_name":"-","bytes_received":"0","istio_policy_status":"-","bytes_sent":"5183"}
+
+使用JSON Handler查看详细日志尤其是五元组信息和Flag
+"outbound|9080||details.default.svc.cluster.local"
+ 
+"outbound|9080||reviews.default.svc.cluster.local"
+ 
+"inbound|9080|http|productpage.default.svc.cluster.local"
+
 安装仪表板：
 kubectl apply -f samples/addons
 
