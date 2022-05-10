@@ -80,6 +80,7 @@ kubectl apply -f samples/bookinfo/networking/bookinfo-gateway.yaml
 kubectl apply -f samples/bookinfo/networking/destination-rule-all.yaml
 
 针对productpage启用nodeport，并确认对外访问路径和端口
+export INGRESS_HOST=$(kubectl get po -l istio=ingressgateway -n istio-system -o jsonpath='{.items[0].status.hostIP}')
 export INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="http2")].nodePort}')
 export SECURE_INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="https")].nodePort}')
 export GATEWAY_URL=$INGRESS_HOST:$INGRESS_PORT
