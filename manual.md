@@ -1536,75 +1536,153 @@ kubectl delete svc httpbin fortio
 ## 1.故障注入
 
 启用路由策略
+
+```bash
 kubectl apply -f samples/bookinfo/networking/virtual-service-all-v1.yaml
 kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-test-v2.yaml
+```
+
+
 
 分别使用匿名用户和jason查看bookinfo界面
   Jason同学黑星星
   普通群众无星星
 
+
+
 注入延时故障
+
+```bash
 kubectl apply -f samples/bookinfo/networking/virtual-service-ratings-test-delay.yaml
+```
+
+
 
 分别使用匿名用户和jason查看bookinfo界面
  Jason 踩坑了 
  普通群众情绪稳定
 
+
+
 注入异常中断故障
+
+```bash
 kubectl apply -f samples/bookinfo/networking/virtual-service-ratings-test-abort.yaml
+```
+
+
 
 分别使用匿名用户和jason查看bookinfo界面 
   Jason 中招 
   普通群众没事
 
+
+
 清理环境
+
+```bash
 kubectl delete -f samples/bookinfo/networking/virtual-service-all-v1.yaml
+```
+
+
 
 ## 2.流量镜像
 
 创建httpbin-v1 和 httpbin-v2
+
+```bash
 kubectl apply -f istiolabmanual/httpbin-v1.yaml  
 kubectl apply -f istiolabmanual/httpbin-v2.yaml 
+```
+
+
 
 发布服务
+
+```bash
 kubectl apply -f istiolabmanual/httpbinsvc.yaml
+```
+
+
 
 启动sleep服务
+
+```bash
 kubectl apply -f samples/sleep/sleep.yaml
+```
+
+
 
 设置路由规则
+
+```bash
 kubectl apply -f istiolabmanual/httpbinvs.yaml 
+```
+
+
 
 使用sleep访问服务
+
+```bash
 export SLEEP_POD=$(kubectl get pod -l app=sleep -o jsonpath={.items..metadata.name})
 kubectl exec -it $SLEEP_POD -c sleep -- sh -c 'curl  http://httpbin:8000/headers' | python3 -m json.tool
+```
+
+
 
 查看v1和v2的日志
+
+```bash
 export V1_POD=$(kubectl get pod -l app=httpbin,version=v1 -o jsonpath={.items..metadata.name})
 kubectl logs -f $V1_POD -c httpbin
+```
 
+```bash
 export V2_POD=$(kubectl get pod -l app=httpbin,version=v2 -o jsonpath={.items..metadata.name})
 kubectl logs -f $V2_POD -c httpbin
+```
+
+
 
 设置镜像规则
+
+```bash
 kubectl apply -f istiolabmanual/mirror.yaml --validate=false
+```
+
+
 
 使用sleep访问服务
+
+```bash
 export SLEEP_POD=$(kubectl get pod -l app=sleep -o jsonpath={.items..metadata.name})
 kubectl exec -it $SLEEP_POD -c sleep -- sh -c 'curl  http://httpbin:8000/headers' | python3 -m json.tool
+```
+
+
 
 查看v1和v2的日志
+
+```bash
 export V1_POD=$(kubectl get pod -l app=httpbin,version=v1 -o jsonpath={.items..metadata.name})
 kubectl logs -f $V1_POD -c httpbin
+```
 
+```bash
 export V2_POD=$(kubectl get pod -l app=httpbin,version=v2 -o jsonpath={.items..metadata.name})
 kubectl logs -f $V2_POD -c httpbin
+```
+
+
 
 清理
+
+```bash
 kubectl delete virtualservice httpbin
 kubectl delete destinationrule httpbin
 kubectl delete deploy httpbin-v1 httpbin-v2 sleep
 kubectl delete svc httpbin 
+```
 
 
 
@@ -1613,40 +1691,89 @@ kubectl delete svc httpbin 
 ## 1.为单Host配置 TLS ingress gateway
 
 创建根证书和为证书签名的私钥
+
+```bash
 openssl req -x509 -sha256 -nodes -days 365 -newkey rsa:2048 -subj '/O=example Inc./CN=example.com' -keyout example.com.key -out example.com.crt
+```
+
+
 
 为httpbin.example.com创建证书和私钥：
+
+```bash
 openssl req -out httpbin.example.com.csr -newkey rsa:2048 -nodes -keyout httpbin.example.com.key -subj "/CN=httpbin.example.com/O=httpbin organization"
 openssl x509 -req -sha256 -days 365 -CA example.com.crt -CAkey example.com.key -set_serial 0 -in httpbin.example.com.csr -out httpbin.example.com.crt
+```
+
+
 
 启动 httpbin 用例
+
+```bash
 kubectl apply -f istiolabmanual/sdshttpbin.yaml 
+```
+
+
 
 为ingress gateway创建 secret
+
+```bash
 kubectl create -n istio-system secret tls httpbin-credential --key=httpbin.example.com.key --cert=httpbin.example.com.crt
+```
+
+
 
 创建 Gateway ，可以打开 yaml文件重点关注servers以及TLS部分的定义
+
+```bash
 kubectl apply -f istiolabmanual/sdsgateway.yaml
+```
+
+
 
 配置网关的ingress traffic routes 定义相应的虚拟服务
+
+```bash
 kubectl apply -f istiolabmanual/sdsvirtualserver.yaml 
+```
+
+
 
 设置ingress主机和端口变量
+
+```bash
 export INGRESS_HOST=$(kubectl get po -l istio=ingressgateway -n istio-system -o jsonpath='{.items[0].status.hostIP}')
 export INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="http2")].nodePort}')
 export SECURE_INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="https")].nodePort}')
 export TCP_INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="tcp")].nodePort}')
+```
+
+
 
 发送HTTPS请求访问httpbin服务
+
+```bash
 curl -v -HHost:httpbin.example.com --resolve "httpbin.example.com:$SECURE_INGRESS_PORT:$INGRESS_HOST" \
 --cacert example.com.crt "https://httpbin.example.com:$SECURE_INGRESS_PORT/status/418"
-    此处应该有茶壶
+```
+
+​    此处应该有茶壶
+
+
 
 回滚日志查看 TSL 握手过程
 
-删除网关的secret并创建一个新 secret以更改ingress gateway的凭据
-kubectl -n istio-system delete secret httpbin-credential
 
+
+删除网关的secret并创建一个新 secret以更改ingress gateway的凭据
+
+```bash
+kubectl -n istio-system delete secret httpbin-credential
+```
+
+
+
+```bash
 mkdir new_certificates
 openssl req -x509 -sha256 -nodes -days 365 -newkey rsa:2048 -subj '/O=example Inc./CN=example.com' -keyout new_certificates/example.com.key -out new_certificates/example.com.crt
 openssl req -out new_certificates/httpbin.example.com.csr -newkey rsa:2048 -nodes -keyout new_certificates/httpbin.example.com.key -subj "/CN=httpbin.example.com/O=httpbin organization"
@@ -1654,228 +1781,472 @@ openssl x509 -req -sha256 -days 365 -CA new_certificates/example.com.crt -CAkey 
 kubectl create -n istio-system secret tls httpbin-credential \
 --key=new_certificates/httpbin.example.com.key \
 --cert=new_certificates/httpbin.example.com.crt
+```
+
+
 
 使用新证书进行访问
+
+```bash
 curl -v -HHost:httpbin.example.com --resolve "httpbin.example.com:$SECURE_INGRESS_PORT:$INGRESS_HOST" \
 --cacert new_certificates/example.com.crt "https://httpbin.example.com:$SECURE_INGRESS_PORT/status/418"
-    此处还是有茶壶
+```
+
+​    此处还是有茶壶
+
+
 
 尝试使用旧证书访问
+
+```bash
 curl -v -HHost:httpbin.example.com --resolve "httpbin.example.com:$SECURE_INGRESS_PORT:$INGRESS_HOST" \
 --cacert example.com.crt "https://httpbin.example.com:$SECURE_INGRESS_PORT/status/418"
-    吃瘪
+```
+
+​    吃瘪
+
+
 
 ## 2.为多Host配置TLS ingress gateway
 
 重新创建httpbin凭据
+
+```bash
 kubectl -n istio-system delete secret httpbin-credential
 kubectl create -n istio-system secret tls httpbin-credential \
 --key=httpbin.example.com.key \
 --cert=httpbin.example.com.crt
+```
+
+
 
 启用helloworld-v1样例
+
+```bash
 kubectl apply -f istiolabmanual/helloworld-v1.yaml
+```
+
+
 
 为helloworld-v1.example.com创建证书和私钥：
+
+```bash
 openssl req -out helloworld-v1.example.com.csr -newkey rsa:2048 -nodes -keyout helloworld-v1.example.com.key -subj "/CN=helloworld-v1.example.com/O=helloworld organization"
 openssl x509 -req -sha256 -days 365 -CA example.com.crt -CAkey example.com.key -set_serial 1 -in helloworld-v1.example.com.csr -out helloworld-v1.example.com.crt
+```
+
+
 
 创建helloworld-credential secret
+
+```bash
 kubectl create -n istio-system secret tls helloworld-credential --key=helloworld-v1.example.com.key --cert=helloworld-v1.example.com.crt
+```
+
+
 
 创建指向两个服务的gateway
+
+```bash
 kubectl apply -f istiolabmanual/mygatewayv1.yaml
+```
+
+
 
 创建helloworld-v1的vs
+
+```bash
 kubectl apply -f istiolabmanual/helloworld-v1vs.yaml
+```
+
+
 
 向v1发起访问
+
+```bash
 curl -v -HHost:helloworld-v1.example.com --resolve "helloworld-v1.example.com:$SECURE_INGRESS_PORT:$INGRESS_HOST" \
 --cacert example.com.crt "https://helloworld-v1.example.com:$SECURE_INGRESS_PORT/hello"
-    此处收获HTTP/2 200
+```
+
+​    此处收获HTTP/2 200
+
+
 
 向httpbin.example.com发起访问
+
+```bash
 curl -v -HHost:httpbin.example.com --resolve "httpbin.example.com:$SECURE_INGRESS_PORT:$INGRESS_HOST" \
 --cacert example.com.crt "https://httpbin.example.com:$SECURE_INGRESS_PORT/status/418"
-    此处还是有茶壶
+```
+
+​    此处还是有茶壶
+
+
 
 ## 3.配置交互TLS ingress gateway
 
 更新证书
+
+```bash
 kubectl -n istio-system delete secret httpbin-credential
 kubectl create -n istio-system secret generic httpbin-credential --from-file=tls.key=httpbin.example.com.key \
 --from-file=tls.crt=httpbin.example.com.crt --from-file=ca.crt=example.com.crt
+```
+
+
 
 把mygateway切换到mutual模式
+
+```bash
 kubectl apply -f istiolabmanual/mygatewayv2.yaml
+```
+
 
 
 尝试使用之前的方式进行访问
+
+```bash
 curl -v -HHost:httpbin.example.com --resolve "httpbin.example.com:$SECURE_INGRESS_PORT:$INGRESS_HOST" \
 --cacert example.com.crt "https://httpbin.example.com:$SECURE_INGRESS_PORT/status/418"
-    吃瘪
+```
+
+​    吃瘪
+
+
 
 生成新的客户端证书和私钥
+
+```bash
 openssl req -out client.example.com.csr -newkey rsa:2048 -nodes -keyout client.example.com.key -subj "/CN=client.example.com/O=client organization"
 openssl x509 -req -sha256 -days 365 -CA example.com.crt -CAkey example.com.key -set_serial 1 -in client.example.com.csr -out client.example.com.crt
+```
+
+
 
 向httpbin.example.com发起访问
+
+```bash
 curl -v -HHost:httpbin.example.com --resolve "httpbin.example.com:$SECURE_INGRESS_PORT:$INGRESS_HOST" \
 --cacert example.com.crt --cert client.example.com.crt --key client.example.com.key \
 "https://httpbin.example.com:$SECURE_INGRESS_PORT/status/418"
-    此处还是有茶壶
+```
+
+​    此处还是有茶壶
+
+
 
 清理环境
+
+```bash
 kubectl delete gateway mygateway
 kubectl delete virtualservice httpbin
 kubectl delete --ignore-not-found=true -n istio-system secret httpbin-credential \
 helloworld-credential
 kubectl delete --ignore-not-found=true virtualservice helloworld-v1
+```
 
+```bash
 rm -rf example.com.crt example.com.key httpbin.example.com.crt httpbin.example.com.key httpbin.example.com.csr helloworld-v1.example.com.crt helloworld-v1.example.com.key helloworld-v1.example.com.csr client.example.com.crt client.example.com.csr client.example.com.key ./new_certificates
+```
 
+```bash
 kubectl delete deployment --ignore-not-found=true httpbin helloworld-v1
 kubectl delete service --ignore-not-found=true httpbin helloworld-v1
+```
 
 
 
 # Lab 7 认证：为应用生成双向TLS
 
 创建两个名称空间foo和bar，并在它们两个上部署httpbin 和 sleep 并启用sidecar注入：
+
+```bash
 kubectl create ns foo
 kubectl apply -f <(istioctl kube-inject -f samples/httpbin/httpbin.yaml) -n foo
 kubectl apply -f <(istioctl kube-inject -f samples/sleep/sleep.yaml) -n foo
 kubectl create ns bar
 kubectl apply -f <(istioctl kube-inject -f samples/httpbin/httpbin.yaml) -n bar
 kubectl apply -f <(istioctl kube-inject -f samples/sleep/sleep.yaml) -n bar
+```
+
+
 
 创建另一个 legacy 名称空间，不启用sidecar注入的情况下部署sleep：
+
+```bash
 kubectl create ns legacy
 kubectl apply -f samples/httpbin/httpbin.yaml -n legacy
 kubectl apply -f samples/sleep/sleep.yaml -n legacy
+```
+
+
 
 查看这三个名称空间的相互访问情况
+
+```bash
 for from in "foo" "bar" "legacy"; do for to in "foo" "bar"; do kubectl exec $(kubectl get pod -l app=sleep -n ${from} -o jsonpath={.items..metadata.name}) -c sleep -n ${from} -- curl http://httpbin.${to}:8000/ip -s -o /dev/null -w "sleep.${from} to httpbin.${to}: %{http_code}\n"; done; done
+```
+
   两两互通，和谐
 
+
+
 检查authentication policies 和 destination rules
+
+```bash
 kubectl get peerauthentication --all-namespaces
 
 kubectl get destinationrule --all-namespaces
+```
+
+
 
 在整个网格上启用PERMISSIVE模式的认证策略
+
+```bash
 kubectl apply -n istio-system -f istiolabmanual/mtlspermissive.yaml 
+```
+
+
 
 查看这三个名称空间的相互访问情况
+
+```bash
 for from in "foo" "bar" "legacy"; do for to in "foo" "bar"; do kubectl exec $(kubectl get pod -l app=sleep -n ${from} -o jsonpath={.items..metadata.name}) -c sleep -n ${from} -- curl http://httpbin.${to}:8000/ip -s -o /dev/null -w "sleep.${from} to httpbin.${to}: %{http_code}\n"; done; done
+```
+
   还是很和谐，因为策略比较宽松
 
+
+
 在整个网格上启用STRICT模式的认证策略
+
+```bash
 kubectl  apply -n istio-system -f istiolabmanual/mtlsstrict.yaml 
+```
+
+
 
 查看这三个名称空间的相互访问情况
+
+```bash
 for from in "foo" "bar" "legacy"; do for to in "foo" "bar"; do kubectl exec $(kubectl get pod -l app=sleep -n ${from} -o jsonpath={.items..metadata.name}) -c sleep -n ${from} -- curl http://httpbin.${to}:8000/ip -s -o /dev/null -w "sleep.${from} to httpbin.${to}: %{http_code}\n"; done; done
+```
+
   策略一旦收紧，legacy 被发现是裸泳的了，悲剧
 
+
+
 重建legacy 名称空间的服务，请启用sidecar注入
+
+```bash
 kubectl apply -f <(istioctl kube-inject -f samples/httpbin/httpbin.yaml) -n legacy
 kubectl apply -f <(istioctl kube-inject -f samples/sleep/sleep.yaml) -n legacy
+```
+
+
 
 查看这三个名称空间的相互访问情况
+
+```bash
 for from in "foo" "bar" "legacy"; do for to in "foo" "bar"; do kubectl exec $(kubectl get pod -l app=sleep -n ${from} -o jsonpath={.items..metadata.name}) -c sleep -n ${from} -- curl http://httpbin.${to}:8000/ip -s -o /dev/null -w "sleep.${from} to httpbin.${to}: %{http_code}\n"; done; done
+```
+
   注入sidecar之后，legacy又可以和小伙伴们一起玩耍了
 
+
+
 清理
+
+```bash
 kubectl delete peerauthentication --all-namespaces –all
 kubectl delete ns foo bar legacy
+```
 
 
 
 # Lab 8 授权：实现JWT身份的认证和授权
 
 创建包含 httpbin 和sleep样例的名称空间foo
+
+```
 kubectl create ns foo
 kubectl apply -f <(istioctl kube-inject -f samples/httpbin/httpbin.yaml) -n foo
 kubectl apply -f <(istioctl kube-inject -f samples/sleep/sleep.yaml) -n foo
+```
+
+
 
 检查httpbin和sleep的通讯情况
+
+```
 kubectl exec $(kubectl get pod -l app=sleep -n foo -o jsonpath={.items..metadata.name}) -c sleep -n foo -- curl http://httpbin.foo:8000/ip -s -o /dev/null -w "%{http_code}\n"
+```
+
   一切正常，本来就是by default的吗
 
 为httpbin创建 request authentication policy
 kubectl apply -f istiolabmanual/jwtra.yaml
 
+
+
 检查持有无效JWT的访问
+
+```
 kubectl exec $(kubectl get pod -l app=sleep -n foo -o jsonpath={.items..metadata.name}) -c sleep -n foo -- curl "http://httpbin.foo:8000/headers" -s -o /dev/null -H "Authorization: Bearer invalidToken" -w "%{http_code}\n"
+```
+
   理应不能访问，401没毛病
 
+
+
 检查不持有JWT的访问， 
+
+```
 kubectl exec $(kubectl get pod -l app=sleep -n foo -o jsonpath={.items..metadata.name}) -c sleep -n foo -- curl "http://httpbin.foo:8000/headers" -s -o /dev/null -w "%{http_code}\n"
+```
+
   这居然也能成功，尴尬
 
+
+
 在foo上启用 authorization policy
+
+```
 kubectl apply -f istiolabmanual/jwtap.yaml 
+```
+
+
 
 设置指向JWT的Token变量
+
+```
 TOKEN=$(curl https://raw.githubusercontent.com/istio/istio/release-1.5/security/tools/jwt/samples/demo.jwt -s) && echo $TOKEN | cut -d '.' -f2 - | base64 --decode -
+```
+
+
 
 使用有效JWT进行访问
+
+```
 kubectl exec $(kubectl get pod -l app=sleep -n foo -o jsonpath={.items..metadata.name}) -c sleep -n foo -- curl "http://httpbin.foo:8000/headers" -s -o /dev/null -H "Authorization: Bearer $TOKEN" -w "%{http_code}\n"
+```
+
+
 
 再次验证不持有JWT的访问
+
+```
 kubectl exec $(kubectl get pod -l app=sleep -n foo -o jsonpath={.items..metadata.name}) -c sleep -n foo -- curl "http://httpbin.foo:8000/headers" -s -o /dev/null -w "%{http_code}\n"
+```
+
   授权策略启用之后，就没办法浑水摸鱼了，403了
 
+
+
 清理环境
+
+```
 kubectl delete namespace foo
+```
 
 
 
 # Lab 9 监控
 
 模拟一次页面访问,为了防止被不必要的katacode页面元素“污染“，我们最好从内部用命令行执行一次curl访问
+
+```bash
 kubectl get svc
 
 curl http://10.109.209.72:9080/productpage
+```
+
+
 
 查看istio proxy日志
 kubectl get pods
 
+```bash
 kubectl logs -f productpage-xxx istio-proxy
+```
+
+
 
 观察到两个outbond条目，分别指向details和reviews，还有一个inbound条目，指向productpage
 
+
+
 为获取更多信息，设置日志以JSON格式显式
+
+```json
 istioctl manifest apply --set profile=demo --set values.meshConfig.accessLogFile="/dev/stdout" --set values.meshConfig.accessLogEncoding=JSON
+```
+
+
 
 （可选）查看日志设置
+
+```bash
 kubectl describe configmap istio -n istio-system | less
-  配置文件有以下输出
+```
+
+配置文件有以下输出
+
+```json
   accessLogEncoding: JSON
   accessLogFile: /dev/stdout
+```
+
+
 
 再次查看istio proxy日志
+
+```bash
 kubectl logs -f productpage-xxx istio-proxy
+```
+
+
 
 分别指向details和reviews 的outbound条目
+
+```json
 {"downstream_remote_address":"10.40.0.12:41654","authority":"details:9080","path":"/details/0","protocol":"HTTP/1.1","upstream_service_time":"9","upstream_local_address":"10.40.0.12:48508","duration":"15","upstream_transport_failure_reason":"-","route_name":"default","downstream_local_address":"10.99.18.67:9080","user_agent":"curl/7.47.0","response_code":"200","response_flags":"-","start_time":"2020-05-15T06:30:26.459Z","method":"GET","request_id":"e2de9f03-38ac-924d-ae2b-176d868c56ab","upstream_host":"10.40.0.8:9080","x_forwarded_for":"-","requested_server_name":"-","bytes_received":"0","istio_policy_status":"-","bytes_sent":"178","upstream_cluster":"outbound|9080||details.default.svc.cluster.local"}
 
 {"upstream_cluster":"outbound|9080||reviews.default.svc.cluster.local","downstream_remote_address":"10.40.0.12:43866","authority":"reviews:9080","path":"/reviews/0","protocol":"HTTP/1.1","upstream_service_time":"1786","upstream_local_address":"10.40.0.12:36048","duration":"1787","upstream_transport_failure_reason":"-","route_name":"default","downstream_local_address":"10.98.163.167:9080","user_agent":"curl/7.47.0","response_code":"200","response_flags":"-","start_time":"2020-05-15T06:30:26.480Z","method":"GET","request_id":"e2de9f03-38ac-924d-ae2b-176d868c56ab","upstream_host":"10.40.0.11:9080","x_forwarded_for":"-","requested_server_name":"-","bytes_received":"0","istio_policy_status":"-","bytes_sent":"379"}
+```
 
 指向productpage的inbound条目
+
+```json
 {"upstream_cluster":"inbound|9080|http|productpage.default.svc.cluster.local","downstream_remote_address":"10.32.0.1:40938","authority":"10.109.209.72:9080","path":"/productpage","protocol":"HTTP/1.1","upstream_service_time":"1839","upstream_local_address":"127.0.0.1:51264","duration":"1840","upstream_transport_failure_reason":"-","route_name":"default","downstream_local_address":"10.40.0.12:9080","user_agent":"curl/7.47.0","response_code":"200","response_flags":"-","start_time":"2020-05-15T06:30:26.446Z","method":"GET","request_id":"e2de9f03-38ac-924d-ae2b-176d868c56ab","upstream_host":"127.0.0.1:9080","x_forwarded_for":"-","requested_server_name":"-","bytes_received":"0","istio_policy_status":"-","bytes_sent":"5183"}
+```
+
+
 
 使用JSON Handler查看详细日志尤其是五元组信息和Flag
-"outbound|9080||details.default.svc.cluster.local"
 
-"outbound|9080||reviews.default.svc.cluster.local"
+```json
+`"outbound|9080||details.default.svc.cluster.local"`
 
-"inbound|9080|http|productpage.default.svc.cluster.local"
+`"outbound|9080||reviews.default.svc.cluster.local"`
 
-安装仪表板：
+`"inbound|9080|http|productpage.default.svc.cluster.local"
+```
+
+
+
+安装仪表板： 
+
+```bash
 kubectl apply -f samples/addons
+```
+
+
 
 开放监控工具的NotePort端口
+
+```bash
 kubectl patch svc -n istio-system prometheus -p '{"spec":{"type": "NodePort"}}'
 kubectl patch service prometheus --namespace=istio-system --type='json' --patch='[{"op": "replace", "path": "/spec/ports/0/nodePort", "value":31120}]'
 
@@ -1887,34 +2258,66 @@ kubectl patch service tracing --namespace=istio-system --type='json' --patch='[{
 
 kubectl patch svc -n istio-system kiali -p '{"spec":{"type": "NodePort"}}'
 kubectl patch service kiali --namespace=istio-system --type='json' --patch='[{"op": "replace", "path": "/spec/ports/0/nodePort", "value":31123}]'
+```
+
+
 
 压测脚本
+
+```
 while true; do curl http://node3:30329/productpage; done  
+```
+
+
 
 仪表板组件打开方式
-prometheus: http://node1:31120/
+prometheus: [http://node1:31120/]( http://node1:31120/)
 
-grafana: http://node1:31121/
+grafana: [http://node1:31121/](http://node1:31121/)
 
-tracing: http://node1:31122/
+tracing: [http://node1:31122/]( http://node1:31122/)
 
-kiali: http://node1:31123/
+kiali: [http://node1:31123/](http://node1:31123/)
+
+
 
 操作过程可参见
 https://zhuanlan.zhihu.com/p/141775176 
 
-清理整个环境
+# 清理整个环境
+
+
 
 清理 Bookinfo
+
+```
 samples/bookinfo/platform/kube/cleanup.sh
+```
+
+
 
 卸载istio
+
+```
 kubectl delete -f samples/addons
 istioctl manifest generate --set profile=demo | kubectl delete --ignore-not-found=true -f -
-    Istio 卸载程序按照层次结构逐级的从 istio-system 命令空间中删除 RBAC 权限和所有资源。对于不存在的资源报错，可以安全的忽略掉，毕竟他们已经被分层的删除了。
+```
+
+​    Istio 卸载程序按照层次结构逐级的从 istio-system 命令空间中删除 RBAC 权限和所有资源。对于不存在的资源报错，可以安全的忽略掉，毕竟他们已经被分层的删除了。
+
+
 
 删除命名空间 istio-system 
+
+```
 kubectl delete namespace istio-system
+```
+
+
 
 指示 Istio 自动注入 Envoy 边车代理的标签默认也不删除。 不需要的时候，使用下面命令删掉它。
+
+```
 kubectl label namespace default istio-injection-
+```
+
