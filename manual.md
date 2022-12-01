@@ -763,7 +763,7 @@ spec:
 
 
 
-创建将review流量都指向v1虚拟服务
+创建将`review`流量都指向`v1`虚拟服务
 
 ```bash
 kubectl apply -f samples/bookinfo/networking/virtual-service-all-v1.yaml
@@ -908,17 +908,82 @@ kubectl apply -f samples/bookinfo/networking/destination-rule-all.yaml
 
 
 
-将所有流量指向reviews:v1
+将所有流量指向`reviews:v1`
 
 ```bash
 kubectl apply -f samples/bookinfo/networking/virtual-service-all-v1.yaml
+```
+
+
+
+查看该虚拟服务
+
+```bash
+nano samples/bookinfo/networking/virtual-service-all-v1.yaml
+```
+
+
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: productpage
+spec:
+  hosts:
+  - productpage
+  http:
+  - route:
+    - destination:
+        host: productpage
+        subset: v1
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: reviews
+spec:
+  hosts:
+  - reviews
+  http:
+  - route:
+    - destination:
+        host: reviews
+        subset: v1
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: ratings
+spec:
+  hosts:
+  - ratings
+  http:
+  - route:
+    - destination:
+        host: ratings
+        subset: v1
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: details
+spec:
+  hosts:
+  - details
+  http:
+  - route:
+    - destination:
+        host: details
+        subset: v1
+---
 ```
 
 使用浏览器查看页面效果，主要是关注reviews的版本
 
 
 
-将50% 的流量从 reviews:v1 转移到 reviews:v3
+将`50%` 的流量从 `reviews:v1` 转移到 `reviews:v3`
 
 ```bash
 kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-50-v3.yaml
@@ -932,11 +997,33 @@ kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-50-v3.yaml
 nano samples/bookinfo/networking/virtual-service-reviews-50-v3.yaml
 ```
 
+
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: reviews
+spec:
+  hosts:
+    - reviews
+  http:
+  - route:
+    - destination:
+        host: reviews
+        subset: v1
+      weight: 50
+    - destination:
+        host: reviews
+        subset: v3
+      weight: 50
+```
+
 使用浏览器查看页面效果，主要是关注reviews的版本
 
 
 
-将 100% 的流量路由到 reviews:v3
+将 `100%` 的流量路由到 `reviews:v3`
 
 ```bash
 kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-v3.yaml
@@ -952,7 +1039,22 @@ nano samples/bookinfo/networking/virtual-service-reviews-v3.yaml
 
 
 
-使用浏览器查看页面效果，主要是关注reviews的版本
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: reviews
+spec:
+  hosts:
+    - reviews
+  http:
+  - route:
+    - destination:
+        host: reviews
+        subset: v3
+```
+
+使用浏览器查看页面效果，主要是关注`reviews`的版本
 
 清理
 
@@ -972,10 +1074,45 @@ kubectl get gw
 
 
 
+```bash
+root@node1:~/istio-1.16.0# kubectl get gw
+NAME               AGE
+bookinfo-gateway   13m
+```
+
+
+
 增加网关
 
 ```bash
 kubectl apply -f istiolabmanual/gateway.yaml 
+```
+
+
+
+查看网关定义文件
+
+```
+nano istiolabmanual/gateway.yaml 
+```
+
+
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: test-gateway
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "*"
 ```
 
 
@@ -988,10 +1125,64 @@ kubectl get gw
 
 
 
+```bash
+root@node1:~/istio-1.16.0# kubectl get gw
+NAME               AGE
+bookinfo-gateway   15m
+test-gateway       62s
+```
+
+
+
 查看该网关配置
 
 ```bash
 kubectl describe gw test-gateway
+```
+
+
+
+```bash
+root@node1:~/istio-1.16.0# kubectl describe gw test-gateway
+Name:         test-gateway
+Namespace:    default
+Labels:       <none>
+Annotations:  <none>
+API Version:  networking.istio.io/v1beta1
+Kind:         Gateway
+Metadata:
+  Creation Timestamp:  2022-12-01T07:16:28Z
+  Generation:          1
+  Managed Fields:
+    API Version:  networking.istio.io/v1alpha3
+    Fields Type:  FieldsV1
+    fieldsV1:
+      f:metadata:
+        f:annotations:
+          .:
+          f:kubectl.kubernetes.io/last-applied-configuration:
+      f:spec:
+        .:
+        f:selector:
+          .:
+          f:istio:
+        f:servers:
+    Manager:         kubectl-client-side-apply
+    Operation:       Update
+    Time:            2022-12-01T07:16:28Z
+  Resource Version:  7717
+  UID:               93077ab8-0f8d-42ef-94d3-d9fa718f5b83
+Spec:
+  Selector:
+    Istio:  ingressgateway
+  Servers:
+    Hosts:
+      *
+    Port:
+      Name:      http
+      Number:    80
+      Protocol:  HTTP
+Events:          <none>
 ```
 
 
@@ -1004,10 +1195,54 @@ kubectl apply -f istiolabmanual/virtualservice.yaml
 
 
 
+查看虚拟服务定义文件
+
+```bash
+nano istiolabmanual/virtualservice.yaml
+```
+
+
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: test-gateway
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - test-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /details
+    - uri:
+        exact: /health
+    route:
+    - destination:
+        host: details
+        port:
+          number: 9080
+```
+
+
+
+
+
 查看虚拟服务
 
 ```bash
 kubectl get vs
+```
+
+
+
+```bash
+root@node1:~/istio-1.16.0# kubectl get vs
+NAME           GATEWAYS               HOSTS   AGE
+bookinfo       ["bookinfo-gateway"]   ["*"]   18m
+test-gateway   ["test-gateway"]       ["*"]   100s
 ```
 
 
@@ -1018,9 +1253,65 @@ kubectl get vs
 kubectl describe vs test-gateway
 ```
 
+
+
+```bash
+root@node1:~/istio-1.16.0# kubectl describe vs test-gateway
+Name:         test-gateway
+Namespace:    default
+Labels:       <none>
+Annotations:  <none>
+API Version:  networking.istio.io/v1beta1
+Kind:         VirtualService
+Metadata:
+  Creation Timestamp:  2022-12-01T07:18:53Z
+  Generation:          1
+  Managed Fields:
+    API Version:  networking.istio.io/v1alpha3
+    Fields Type:  FieldsV1
+    fieldsV1:
+      f:metadata:
+        f:annotations:
+          .:
+          f:kubectl.kubernetes.io/last-applied-configuration:
+      f:spec:
+        .:
+        f:gateways:
+        f:hosts:
+        f:http:
+    Manager:         kubectl-client-side-apply
+    Operation:       Update
+    Time:            2022-12-01T07:18:53Z
+  Resource Version:  8001
+  UID:               329eb5c3-4518-4f32-b541-8399c282511f
+Spec:
+  Gateways:
+    test-gateway
+  Hosts:
+    *
+  Http:
+    Match:
+      Uri:
+        Prefix:  /details
+      Uri:
+        Exact:  /health
+    Route:
+      Destination:
+        Host:  details
+        Port:
+          Number:  9080
+Events:            <none>
+```
+
+
+
 随后使用浏览器访问/details/0 和 /health，检查效果
 
+![image-20221201152934012](manual.assets/image-20221201152934012.png)
 
+
+
+![image-20221201152902244](manual.assets/image-20221201152902244.png)
 
 清理环境
 
@@ -1028,6 +1319,8 @@ kubectl describe vs test-gateway
 kubectl delete -f istiolabmanual/gateway.yaml 
 kubectl delete -f istiolabmanual/virtualservice.yaml
 ```
+
+
 
 
 
@@ -1049,6 +1342,20 @@ kubectl  get pod
 
 
 
+```bash
+root@node1:~/istio-1.16.0# kubectl  get pod
+NAME                             READY   STATUS    RESTARTS   AGE
+details-v1-698b5d8c98-6qksf      2/2     Running   0          31m
+productpage-v1-bf4b489d8-b6k9m   2/2     Running   0          31m
+ratings-v1-5967f59c58-wstvp      2/2     Running   0          31m
+reviews-v1-9c6bb6658-zwhcl       2/2     Running   0          31m
+reviews-v2-8454bb78d8-fbj4k      2/2     Running   0          31m
+reviews-v3-6dc9897554-n6947      2/2     Running   0          31m
+sleep-75bbc86479-rz9hv           2/2     Running   0          44s
+```
+
+
+
 设置source_pod 变量
 
 ```bash
@@ -1065,10 +1372,48 @@ kubectl exec -it $SOURCE_POD -c sleep -- curl http://httpbin.org/headers
 
 
 
+```json
+root@node1:~/istio-1.16.0# kubectl exec -it $SOURCE_POD -c sleep -- curl http://httpbin.org/headers
+{
+  "headers": {
+    "Accept": "*/*",
+    "Host": "httpbin.org",
+    "User-Agent": "curl/7.81.0-DEV",
+    "X-Amzn-Trace-Id": "Root=1-6388586a-60445856410d4db06df83a5c",
+    "X-B3-Sampled": "1",
+    "X-B3-Spanid": "15e9d5ae982425d4",
+    "X-B3-Traceid": "08e4b47d73abff7a15e9d5ae982425d4",
+    "X-Envoy-Attempt-Count": "1",
+    "X-Envoy-Peer-Metadata": "ChkKDkFQUF9DT05UQUlORVJTEgcaBXNsZWVwChoKCkNMVVNURVJfSUQSDBoKS3ViZXJuZXRlcwofCgxJTlNUQU5DRV9JUFMSDxoNMTAuMjQ0LjEwNC4xMgoZCg1JU1RJT19WRVJTSU9OEggaBjEuMTYuMAqhAQoGTEFCRUxTEpYBKpMBCg4KA2FwcBIHGgVzbGVlcAokChlzZWN1cml0eS5pc3Rpby5pby90bHNNb2RlEgcaBWlzdGlvCioKH3NlcnZpY2UuaXN0aW8uaW8vY2Fub25pY2FsLW5hbWUSBxoFc2xlZXAKLwojc2VydmljZS5pc3Rpby5pby9jYW5vbmljYWwtcmV2aXNpb24SCBoGbGF0ZXN0ChoKB01FU0hfSUQSDxoNY2x1c3Rlci5sb2NhbAogCgROQU1FEhgaFnNsZWVwLTc1YmJjODY0Nzktcno5aHYKFgoJTkFNRVNQQUNFEgkaB2RlZmF1bHQKSQoFT1dORVISQBo+a3ViZXJuZXRlczovL2FwaXMvYXBwcy92MS9uYW1lc3BhY2VzL2RlZmF1bHQvZGVwbG95bWVudHMvc2xlZXAKFwoRUExBVEZPUk1fTUVUQURBVEESAioAChgKDVdPUktMT0FEX05BTUUSBxoFc2xlZXA=",
+    "X-Envoy-Peer-Metadata-Id": "sidecar~10.244.104.12~sleep-75bbc86479-rz9hv.default~default.svc.cluster.local"
+  }
+}
+```
+
+
+
 关闭默认出站访问
 
 ```bash
 istioctl install  --set meshConfig.outboundTrafficPolicy.mode=REGISTRY_ONLY -y
+```
+
+
+
+```bash
+root@node1:~/istio-1.16.0# istioctl install  --set meshConfig.outboundTrafficPolicy.mode=REGISTRY_ONLY -y
+✔ Istio core installed
+✔ Istiod installed
+✔ Ingress gateways installed
+- Pruning removed resources                                                                                                              Removed Deployment:istio-system:istio-egressgateway.
+  Removed Service:istio-system:istio-egressgateway.
+  Removed ServiceAccount:istio-system:istio-egressgateway-service-account.
+  Removed RoleBinding:istio-system:istio-egressgateway-sds.
+  Removed Role:istio-system:istio-egressgateway-sds.
+  Removed PodDisruptionBudget:istio-system:istio-egressgateway.
+✔ Installation complete                                                                                                                Making this installation the default for injection and validation.
+
+Thank you for installing Istio 1.16.  Please take a few minutes to tell us about your install/upgrade experience!  https://forms.gle/99uiMML96AmsXY5d6
 ```
 
 
@@ -1081,6 +1426,13 @@ kubectl exec -it $SOURCE_POD -c sleep -- curl http://httpbin.org/headers
 
 
 
+```
+root@node1:~/istio-1.16.0# kubectl exec -it $SOURCE_POD -c sleep -- curl http://httpbin.org/headers
+root@node1:~/istio-1.16.0#
+```
+
+
+
 创建指向 httpbin.org 的ServiceEntry
 
 ```bash
@@ -1089,10 +1441,87 @@ kubectl apply -f istiolabmanual/serviceentry.yaml
 
 
 
+查看ServiceEntry配置文件
+
+```yaml
+nano istiolabmanual/serviceentry.yaml
+```
+
+
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: ServiceEntry
+metadata:
+  name: httpbin-ext
+spec:
+  hosts:
+  - httpbin.org
+  ports:
+  - number: 80
+    name: http
+    protocol: HTTP
+  resolution: DNS
+  location: MESH_EXTERNAL
+```
+
+
+
 查看ServiceEntry
 
 ```bash
 kubectl get se
+```
+
+```bash
+kubectl describe se httpbin-ext
+```
+
+
+
+```bash
+root@node1:~/istio-1.16.0# kubectl get se
+NAME          HOSTS             LOCATION        RESOLUTION   AGE
+httpbin-ext   ["httpbin.org"]   MESH_EXTERNAL   DNS          75s
+root@node1:~/istio-1.16.0# kubectl describe se httpbin-ext
+Name:         httpbin-ext
+Namespace:    default
+Labels:       <none>
+Annotations:  <none>
+API Version:  networking.istio.io/v1beta1
+Kind:         ServiceEntry
+Metadata:
+  Creation Timestamp:  2022-12-01T07:34:56Z
+  Generation:          1
+  Managed Fields:
+    API Version:  networking.istio.io/v1alpha3
+    Fields Type:  FieldsV1
+    fieldsV1:
+      f:metadata:
+        f:annotations:
+          .:
+          f:kubectl.kubernetes.io/last-applied-configuration:
+      f:spec:
+        .:
+        f:hosts:
+        f:location:
+        f:ports:
+        f:resolution:
+    Manager:         kubectl-client-side-apply
+    Operation:       Update
+    Time:            2022-12-01T07:34:56Z
+  Resource Version:  10086
+  UID:               df96eb55-35a1-46c0-9d1e-897d78dca7c4
+Spec:
+  Hosts:
+    httpbin.org
+  Location:  MESH_EXTERNAL
+  Ports:
+    Name:      http
+    Number:    80
+    Protocol:  HTTP
+  Resolution:  DNS
+Events:        <none>
 ```
 
 
@@ -1105,10 +1534,11 @@ kubectl exec -it $SOURCE_POD -c sleep -- curl http://httpbin.org/ip
 
 
 
-查看该ServiceEntry配置
-
 ```bash
-kubectl describe se httpbin-ext
+root@node1:~/istio-1.16.0# kubectl exec -it $SOURCE_POD -c sleep -- curl http://httpbin.org/ip
+{
+  "origin": "20.205.45.50"
+}
 ```
 
 
@@ -1141,10 +1571,32 @@ kubectl get pods
 
 
 
+```bash
+root@node1:~/istio-1.16.0# kubectl get pods
+NAME                             READY   STATUS    RESTARTS   AGE
+details-v1-698b5d8c98-6qksf      2/2     Running   0          42m
+httpbin-85d76b4bb6-brrkx         2/2     Running   0          84s
+productpage-v1-bf4b489d8-b6k9m   2/2     Running   0          42m
+ratings-v1-5967f59c58-wstvp      2/2     Running   0          42m
+reviews-v1-9c6bb6658-zwhcl       2/2     Running   0          42m
+reviews-v2-8454bb78d8-fbj4k      2/2     Running   0          42m
+reviews-v3-6dc9897554-n6947      2/2     Running   0          42m
+```
+
+
+
 查看ingressgateway
 
 ```bash
 kubectl get svc istio-ingressgateway -n istio-system
+```
+
+
+
+```bash
+root@node1:~/istio-1.16.0# kubectl get svc istio-ingressgateway -n istio-system
+NAME                   TYPE           CLUSTER-IP      EXTERNAL-IP   PORT(S)                                                                      AGE
+istio-ingressgateway   LoadBalancer   10.105.85.107   <pending>     15021:31215/TCP,80:30193/TCP,443:32696/TCP,31400:32528/TCP,15443:32399/TCP   48m
 ```
 
 
@@ -1168,10 +1620,72 @@ kubectl apply -f  istiolabmanual/ingressgateway.yaml
 
 
 
+查看ingress gateway配置文件
+
+```bash
+nano istiolabmanual/ingressgateway.yaml 
+```
+
+
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: httpbin-gateway
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "httpbin.example.com"
+```
+
+
+
+
+
 创建virtual service 定义路由规则 
 
 ```bash
 kubectl apply -f istiolabmanual/ingressvs.yaml 
+```
+
+
+
+查看ingress vs的配置
+
+```bash
+nano istiolabmanual/ingressvs.yaml 
+```
+
+
+
+```bash
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: httpbin
+spec:
+  hosts:
+  - "httpbin.example.com"
+  gateways:
+  - httpbin-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /status
+    - uri:
+        prefix: /delay
+    route:
+    - destination:
+        port:
+          number: 8000
+        host: httpbin
 ```
 
 
@@ -1181,6 +1695,17 @@ kubectl apply -f istiolabmanual/ingressvs.yaml
 ```bash
 kubectl get vs
 ```
+
+
+
+```bash
+root@node1:~/istio-1.16.0# kubectl get vs
+NAME       GATEWAYS               HOSTS                     AGE
+bookinfo   ["bookinfo-gateway"]   ["*"]                     43m
+httpbin    ["httpbin-gateway"]    ["httpbin.example.com"]   80s
+```
+
+
 
 
 
@@ -1194,10 +1719,44 @@ curl -I -HHost:httpbin.example.com http://$INGRESS_HOST:$INGRESS_PORT/delay/2
 
 
 
+```bash
+root@node1:~/istio-1.16.0# curl -I -HHost:httpbin.example.com http://$INGRESS_HOST:$INGRESS_PORT/status/200
+HTTP/1.1 200 OK
+server: istio-envoy
+date: Thu, 01 Dec 2022 07:45:37 GMT
+content-type: text/html; charset=utf-8
+access-control-allow-origin: *
+access-control-allow-credentials: true
+content-length: 0
+x-envoy-upstream-service-time: 28
+
+root@node1:~/istio-1.16.0# curl -I -HHost:httpbin.example.com http://$INGRESS_HOST:$INGRESS_PORT/delay/2
+HTTP/1.1 200 OK
+server: istio-envoy
+date: Thu, 01 Dec 2022 07:45:50 GMT
+content-type: application/json
+content-length: 738
+access-control-allow-origin: *
+access-control-allow-credentials: true
+x-envoy-upstream-service-time: 2006
+```
+
+
+
 访问未经定义的目标
 
 ```bash
 curl -I -HHost:httpbin.example.com http://$INGRESS_HOST:$INGRESS_PORT/headers
+```
+
+
+
+```bash
+root@node1:~/istio-1.16.0# curl -I -HHost:httpbin.example.com http://$INGRESS_HOST:$INGRESS_PORT/headers
+HTTP/1.1 404 Not Found
+date: Thu, 01 Dec 2022 07:46:32 GMT
+server: istio-envoy
+transfer-encoding: chunked
 ```
 
 
@@ -1210,7 +1769,57 @@ kubectl apply -f istiolabmanual/ingressgateway2.yaml
 
 
 
-使用浏览器加 /headers 在外网进行访问
+查看ingress gate2的配置文件
+
+```bash
+nano istiolabmanual/ingressgateway2.yaml 
+```
+
+
+
+```bash
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: httpbin-gateway
+spec:
+  selector:
+    istio: ingressgateway # use Istio default gateway implementation
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "*"
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: httpbin
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - httpbin-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /headers
+    route:
+    - destination:
+        port:
+          number: 8000
+        host: httpbin
+```
+
+
+
+
+
+使用浏览器加 /headers 在群集外进行访问
+
+![image-20221201154930064](manual.assets/image-20221201154930064.png)
 
 
 
@@ -1218,6 +1827,15 @@ kubectl apply -f istiolabmanual/ingressgateway2.yaml
 
 ```bash
 kubectl get vs
+```
+
+
+
+```bash
+root@node1:~/istio-1.16.0# kubectl get vs
+NAME       GATEWAYS               HOSTS   AGE
+bookinfo   ["bookinfo-gateway"]   ["*"]   47m
+httpbin    ["httpbin-gateway"]    ["*"]   5m52s
 ```
 
 
@@ -2283,6 +2901,8 @@ kiali: [http://node1:31123/](http://node1:31123/)
 
 操作过程可参见
 https://zhuanlan.zhihu.com/p/141775176 
+
+
 
 # 清理整个环境
 
