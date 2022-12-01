@@ -313,41 +313,368 @@ git clone https://github.com/cloudzun/istiolabmanual
 Bookinfo 是 Istio 社区官方推荐的示例应用之一。它可以用来演示多种 Istio 的特性，并且它是一个异构的微服务应用。
 本章节大部分实验都和bookinfo有关，因此熟练 快速 准确地部署bookinfo是捣鼓istio重要基本功。
 
+
+
 启动自动注入sidecar
+
+```bash
 kubectl label namespace default istio-injection=enabled
+```
+
+
 
 安装 bookinfo
+
+```bash
 kubectl apply -f samples/bookinfo/platform/kube/bookinfo.yaml
+```
+
+
+
+```bash
+controlplane $ kubectl label namespace default istio-injection=enabled
+namespace/default labeled
+controlplane $ kubectl apply -f samples/bookinfo/platform/kube/bookinfo.yaml
+service/details created
+serviceaccount/bookinfo-details created
+deployment.apps/details-v1 created
+service/ratings created
+serviceaccount/bookinfo-ratings created
+deployment.apps/ratings-v1 created
+service/reviews created
+serviceaccount/bookinfo-reviews created
+deployment.apps/reviews-v1 created
+deployment.apps/reviews-v2 created
+deployment.apps/reviews-v3 created
+service/productpage created
+serviceaccount/bookinfo-productpage created
+deployment.apps/productpage-v1 created
+```
+
+
 
 确认服务和 pod状态
+
+```bash
 kubectl get svc
 
 kubectl get pod
+```
 
 此处需要等待大概2分钟，等到所有的pod都ready再进行下一步
 
+
+
+```bash
+controlplane $ kubectl get svc
+NAME          TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)    AGE
+details       ClusterIP   10.103.216.219   <none>        9080/TCP   40s
+kubernetes    ClusterIP   10.96.0.1        <none>        443/TCP    17d
+productpage   ClusterIP   10.96.27.197     <none>        9080/TCP   39s
+ratings       ClusterIP   10.96.54.189     <none>        9080/TCP   39s
+reviews       ClusterIP   10.96.4.49       <none>        9080/TCP   39s
+controlplane $ 
+controlplane $ kubectl get pod
+NAME                             READY   STATUS            RESTARTS   AGE
+details-v1-5ffd6b64f7-s7src      2/2     Running           0          41s
+productpage-v1-979d4d9fc-l97ck   0/2     PodInitializing   0          40s
+ratings-v1-5f9699cfdf-465tm      2/2     Running           0          41s
+reviews-v1-569db879f5-44qtz      0/2     PodInitializing   0          41s
+reviews-v2-65c4dc6fdc-xpb2d      1/2     Running           0          41s
+reviews-v3-c9c4fb987-xwdmj       0/2     PodInitializing   0          41s
+```
+
+
+
 检查sidecar自动注入
-kubectl describe pod productpage-v1-7d6cfb7dfd-2nlj9
+
+```bash
+kubectl describe pod productpage-v1-979d4d9fc-l97ck
+```
+
   *重点关注Container部分和Events部分
 
+```bash
+controlplane $ kubectl describe pod productpage-v1-979d4d9fc-l97ck
+Name:             productpage-v1-979d4d9fc-l97ck
+Namespace:        default
+Priority:         0
+Service Account:  bookinfo-productpage
+Node:             controlplane/172.30.1.2
+Start Time:       Thu, 01 Dec 2022 03:41:06 +0000
+Labels:           app=productpage
+                  pod-template-hash=979d4d9fc
+                  security.istio.io/tlsMode=istio
+                  service.istio.io/canonical-name=productpage
+                  service.istio.io/canonical-revision=v1
+                  version=v1
+Annotations:      cni.projectcalico.org/containerID: 370eb16f6bbdde82e05db1b246ca9c9b7d624ea6da7725f2dd8c994833959c8b
+                  cni.projectcalico.org/podIP: 192.168.0.7/32
+                  cni.projectcalico.org/podIPs: 192.168.0.7/32
+                  kubectl.kubernetes.io/default-container: productpage
+                  kubectl.kubernetes.io/default-logs-container: productpage
+                  prometheus.io/path: /stats/prometheus
+                  prometheus.io/port: 15020
+                  prometheus.io/scrape: true
+                  sidecar.istio.io/status:
+                    {"initContainers":["istio-init"],"containers":["istio-proxy"],"volumes":["workload-socket","credential-socket","workload-certs","istio-env...
+Status:           Running
+IP:               192.168.0.7
+IPs:
+  IP:           192.168.0.7
+Controlled By:  ReplicaSet/productpage-v1-979d4d9fc
+Init Containers:
+  istio-init:
+    Container ID:  containerd://0ed6fa7fc4424ca8e438b539a789f0d0f1cf83db44c51000f69e8ffc782f0ebd
+    Image:         docker.io/istio/proxyv2:1.16.0
+    Image ID:      docker.io/istio/proxyv2@sha256:f6f97fa4fb77a3cbe1e3eca0fa46bd462ad6b284c129cf57bf91575c4fb50cf9
+    Port:          <none>
+    Host Port:     <none>
+    Args:
+      istio-iptables
+      -p
+      15001
+      -z
+      15006
+      -u
+      1337
+      -m
+      REDIRECT
+      -i
+      *
+      -x
+      
+      -b
+      *
+      -d
+      15090,15021,15020
+      --log_output_level=default:info
+    State:          Terminated
+      Reason:       Completed
+      Exit Code:    0
+      Started:      Thu, 01 Dec 2022 03:41:18 +0000
+      Finished:     Thu, 01 Dec 2022 03:41:18 +0000
+    Ready:          True
+    Restart Count:  0
+    Limits:
+      cpu:     2
+      memory:  1Gi
+    Requests:
+      cpu:        10m
+      memory:     40Mi
+    Environment:  <none>
+    Mounts:
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-n7v78 (ro)
+Containers:
+  productpage:
+    Container ID:   containerd://8a0f4d1e955d4b0c5349d5bc56467d6bb135bf06031dc397d483dda64fcd9e89
+    Image:          docker.io/istio/examples-bookinfo-productpage-v1:1.17.0
+    Image ID:       docker.io/istio/examples-bookinfo-productpage-v1@sha256:6668bcf42ef0afb89d0ccd378905c761eab0f06919e74e178852b58b4bbb29c5
+    Port:           9080/TCP
+    Host Port:      0/TCP
+    State:          Running
+      Started:      Thu, 01 Dec 2022 03:42:06 +0000
+    Ready:          True
+    Restart Count:  0
+    Environment:    <none>
+    Mounts:
+      /tmp from tmp (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-n7v78 (ro)
+  istio-proxy:
+    Container ID:  containerd://01ec70eef67d93f2b67b0c274edf98c6c14718a61fe8e97137f792ec3023105b
+    Image:         docker.io/istio/proxyv2:1.16.0
+    Image ID:      docker.io/istio/proxyv2@sha256:f6f97fa4fb77a3cbe1e3eca0fa46bd462ad6b284c129cf57bf91575c4fb50cf9
+    Port:          15090/TCP
+    Host Port:     0/TCP
+    Args:
+      proxy
+      sidecar
+      --domain
+      $(POD_NAMESPACE).svc.cluster.local
+      --proxyLogLevel=warning
+      --proxyComponentLogLevel=misc:error
+      --log_output_level=default:info
+      --concurrency
+      2
+    State:          Running
+      Started:      Thu, 01 Dec 2022 03:42:06 +0000
+    Ready:          True
+    Restart Count:  0
+    Limits:
+      cpu:     2
+      memory:  1Gi
+    Requests:
+      cpu:      10m
+      memory:   40Mi
+    Readiness:  http-get http://:15021/healthz/ready delay=1s timeout=3s period=2s #success=1 #failure=30
+    Environment:
+      JWT_POLICY:                    third-party-jwt
+      PILOT_CERT_PROVIDER:           istiod
+      CA_ADDR:                       istiod.istio-system.svc:15012
+      POD_NAME:                      productpage-v1-979d4d9fc-l97ck (v1:metadata.name)
+      POD_NAMESPACE:                 default (v1:metadata.namespace)
+      INSTANCE_IP:                    (v1:status.podIP)
+      SERVICE_ACCOUNT:                (v1:spec.serviceAccountName)
+      HOST_IP:                        (v1:status.hostIP)
+      PROXY_CONFIG:                  {}
+                                     
+      ISTIO_META_POD_PORTS:          [
+                                         {"containerPort":9080,"protocol":"TCP"}
+                                     ]
+      ISTIO_META_APP_CONTAINERS:     productpage
+      ISTIO_META_CLUSTER_ID:         Kubernetes
+      ISTIO_META_INTERCEPTION_MODE:  REDIRECT
+      ISTIO_META_WORKLOAD_NAME:      productpage-v1
+      ISTIO_META_OWNER:              kubernetes://apis/apps/v1/namespaces/default/deployments/productpage-v1
+      ISTIO_META_MESH_ID:            cluster.local
+      TRUST_DOMAIN:                  cluster.local
+    Mounts:
+      /etc/istio/pod from istio-podinfo (rw)
+      /etc/istio/proxy from istio-envoy (rw)
+      /var/lib/istio/data from istio-data (rw)
+      /var/run/secrets/credential-uds from credential-socket (rw)
+      /var/run/secrets/istio from istiod-ca-cert (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-n7v78 (ro)
+      /var/run/secrets/tokens from istio-token (rw)
+      /var/run/secrets/workload-spiffe-credentials from workload-certs (rw)
+      /var/run/secrets/workload-spiffe-uds from workload-socket (rw)
+Conditions:
+  Type              Status
+  Initialized       True 
+  Ready             True 
+  ContainersReady   True 
+  PodScheduled      True 
+Volumes:
+  workload-socket:
+    Type:       EmptyDir (a temporary directory that shares a pod's lifetime)
+    Medium:     
+    SizeLimit:  <unset>
+  credential-socket:
+    Type:       EmptyDir (a temporary directory that shares a pod's lifetime)
+    Medium:     
+    SizeLimit:  <unset>
+  workload-certs:
+    Type:       EmptyDir (a temporary directory that shares a pod's lifetime)
+    Medium:     
+    SizeLimit:  <unset>
+  istio-envoy:
+    Type:       EmptyDir (a temporary directory that shares a pod's lifetime)
+    Medium:     Memory
+    SizeLimit:  <unset>
+  istio-data:
+    Type:       EmptyDir (a temporary directory that shares a pod's lifetime)
+    Medium:     
+    SizeLimit:  <unset>
+  istio-podinfo:
+    Type:  DownwardAPI (a volume populated by information about the pod)
+    Items:
+      metadata.labels -> labels
+      metadata.annotations -> annotations
+  istio-token:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  43200
+  istiod-ca-cert:
+    Type:      ConfigMap (a volume populated by a ConfigMap)
+    Name:      istio-ca-root-cert
+    Optional:  false
+  tmp:
+    Type:       EmptyDir (a temporary directory that shares a pod's lifetime)
+    Medium:     
+    SizeLimit:  <unset>
+  kube-api-access-n7v78:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  3607
+    ConfigMapName:           kube-root-ca.crt
+    ConfigMapOptional:       <nil>
+    DownwardAPI:             true
+QoS Class:                   Burstable
+Node-Selectors:              <none>
+Tolerations:                 node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                             node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+Events:
+  Type     Reason     Age                From               Message
+  ----     ------     ----               ----               -------
+  Normal   Scheduled  96s                default-scheduler  Successfully assigned default/productpage-v1-979d4d9fc-l97ck to controlplane
+  Normal   Pulling    95s                kubelet            Pulling image "docker.io/istio/proxyv2:1.16.0"
+  Normal   Pulled     85s                kubelet            Successfully pulled image "docker.io/istio/proxyv2:1.16.0" in 10.334996634s
+  Normal   Created    85s                kubelet            Created container istio-init
+  Normal   Started    84s                kubelet            Started container istio-init
+  Normal   Pulling    84s                kubelet            Pulling image "docker.io/istio/examples-bookinfo-productpage-v1:1.17.0"
+  Normal   Pulled     37s                kubelet            Successfully pulled image "docker.io/istio/examples-bookinfo-productpage-v1:1.17.0" in 46.9444707s
+  Normal   Created    37s                kubelet            Created container productpage
+  Normal   Started    36s                kubelet            Started container productpage
+  Normal   Pulled     36s                kubelet            Container image "docker.io/istio/proxyv2:1.16.0" already present on machine
+  Normal   Created    36s                kubelet            Created container istio-proxy
+  Normal   Started    36s                kubelet            Started container istio-proxy
+  Warning  Unhealthy  33s (x4 over 35s)  kubelet            Readiness probe failed: Get "http://192.168.0.7:15021/healthz/ready": dial tcp 192.168.0.7:15021: connect: connection refused
+```
+
+
+
 检查productpage页面访问
+
+```bash
 kubectl exec -it $(kubectl get pod -l app=ratings -o jsonpath='{.items[0].metadata.name}') -c ratings -- curl productpage:9080/productpage | grep -o "<title>.*</title>"
+```
+
+
+
+```bash
+controlplane $ kubectl exec -it $(kubectl get pod -l app=ratings -o jsonpath='{.items[0].metadata.name}') -c ratings -- curl productpage:9080/productpage | grep -o "<title>.*</title>"
+<title>Simple Bookstore App</title>
+```
+
+
 
 启动默认网关
+
+```bash
 kubectl apply -f samples/bookinfo/networking/bookinfo-gateway.yaml
+```
+
+
 
 使用默认目标规则
+
+```bash
 kubectl apply -f samples/bookinfo/networking/destination-rule-all.yaml
+```
+
+
 
 针对productpage启用nodeport，并确认对外访问路径和端口
+
+```bash
 export INGRESS_HOST=$(kubectl get po -l istio=ingressgateway -n istio-system -o jsonpath='{.items[0].status.hostIP}')
 export INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="http2")].nodePort}')
 export SECURE_INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="https")].nodePort}')
 export GATEWAY_URL=$INGRESS_HOST:$INGRESS_PORT
 echo $GATEWAY_URL
 echo http://$GATEWAY_URL/productpage
+```
 
  
+
+```bash
+controlplane $ kubectl apply -f samples/bookinfo/networking/destination-rule-all.yaml
+destinationrule.networking.istio.io/productpage created
+destinationrule.networking.istio.io/reviews created
+destinationrule.networking.istio.io/ratings created
+destinationrule.networking.istio.io/details created
+controlplane $ export INGRESS_HOST=$(kubectl get po -l istio=ingressgateway -n istio-system -o jsonpath='{.items[0].status.hostIP}')
+controlplane $ export INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="http2")].nodePort}')
+controlplane $ export SECURE_INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="https")].nodePort}')
+controlplane $ export GATEWAY_URL=$INGRESS_HOST:$INGRESS_PORT
+controlplane $ echo $GATEWAY_URL
+172.30.2.2:30175
+controlplane $ echo http://$GATEWAY_URL/productpage
+http://172.30.2.2:30175/productpage
+controlplane $ 
+```
+
+
+
+
 
 # Lab 3 服务路由和流量管理
 
