@@ -1379,68 +1379,155 @@ kubectl delete -f istiolabmanual/egressvs.yaml 
 ## 1.超时重试
 
 （可选）加载default destination rules.
+
+```bash
 kubectl apply -f samples/bookinfo/networking/destination-rule-all.yaml
+```
+
+
 
 将review指向v2版本
+
+```bash
 kubectl apply -f istiolabmanual/reviewsv2.yaml 
+```
+
+
 
 查看bookinfo页面，看黑星星
 
+
+
 给ratings 服务添加延迟
+
+```bash
 kubectl apply -f istiolabmanual/delay.yaml 
+```
+
+
 
 查看bookinfo页面观察延迟
   会观察到页面需要大约2s才能加载完成 
 
+
+
 给reviews 服务添加超时策略
+
+```bash
 kubectl apply -f istiolabmanual/timeout.yaml 
+```
+
+
 
 查看bookinfo页面观察快速失败
   延时设置为2s，但是我们的超时是1s，所以就可耻地失败了
 
-给ratings 服务添加重试策略
-kubectl apply -f istiolabmanual/retry.yaml 
- 	
-从bookinfo页面上刷新一次，查看日志看是否有两次重试
-kubectl logs -f ratings-v1-xxxxx -c istio-proxy
 
-注意观察日志中的两个条目的path和start_time
+
+给ratings 服务添加重试策略
+
+```bash
+kubectl apply -f istiolabmanual/retry.yaml 
+```
+
+ 	
+
+从bookinfo页面上刷新一次，查看日志看是否有两次重试
+
+```bash
+kubectl logs -f ratings-v1-xxxxx -c istio-proxy
+```
+
+
+
+注意观察日志中的两个条目的`path`和`start_time`
+
+
 
 清理
+
+```bash
 kubectl delete -f samples/bookinfo/networking/virtual-service-all-v1.yaml
+```
+
+
 
 ## 2.熔断
 
 部署httpin服务
+
+```bash
 kubectl apply -f samples/httpbin/httpbin.yaml
+```
+
+
 
 在服务的DestinationRule 中添加熔断设置
+
+```bash
 kubectl apply -f istiolabmanual/circuitbreaking.yaml 
+```
+
+
 
 查看DestinationRule 
+
+```bash
 kubectl describe dr httpbin 
+```
+
+
 
 安装测试工具
+
+```bash
 kubectl apply -f samples/httpbin/sample-client/fortio-deploy.yaml
+```
+
+
 
 查看正常访问结果
+
+```bash
 FORTIO_POD=$(kubectl get pods -lapp=fortio -o 'jsonpath={.items[0].metadata.name}')
 kubectl exec -it "$FORTIO_POD"  -c fortio -- /usr/bin/fortio load -curl http://httpbin:8000/get
+```
+
+
 
 触发熔断  2个并发，执行20次
+
+```bash
 kubectl exec -it "$FORTIO_POD"  -c fortio -- /usr/bin/fortio load -c 2 -qps 0 -n 20 -loglevel Warning http://httpbin:8000/get
+```
+
+
 
 触发熔断 again 3个并发，执行30次
+
+```bash
 kubectl exec -it "$FORTIO_POD"  -c fortio -- /usr/bin/fortio load -c 3 -qps 0 -n 30 -loglevel Warning http://httpbin:8000/get
+```
+
+
 
 查看熔断指标
+
+```bash
 kubectl exec "$FORTIO_POD" -c istio-proxy -- pilot-agent request GET stats | grep httpbin | grep pending
- 	overflow即是被熔断的访问次数
+```
+
+ 	`overflow`即是被熔断的访问次数
+
+
 
 清理
+
+```bash
 kubectl delete destinationrule httpbin
 kubectl delete deploy httpbin fortio-deploy
 kubectl delete svc httpbin fortio
+```
 
  
 
