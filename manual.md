@@ -1305,7 +1305,7 @@ Events:            <none>
 
 
 
-随后使用浏览器访问/details/0 和 /health，检查效果
+随后使用浏览器访问`/details/0` 和 `/health`，检查效果
 
 ![image-20221201152934012](manual.assets/image-20221201152934012.png)
 
@@ -1433,7 +1433,7 @@ root@node1:~/istio-1.16.0#
 
 
 
-创建指向 httpbin.org 的ServiceEntry
+创建指向 `httpbin.org` 的ServiceEntry
 
 ```bash
 kubectl apply -f istiolabmanual/serviceentry.yaml
@@ -1817,7 +1817,7 @@ spec:
 
 
 
-使用浏览器加 /headers 在群集外进行访问
+使用浏览器加 `/headers` 在群集外进行访问
 
 ![image-20221201154930064](manual.assets/image-20221201154930064.png)
 
@@ -2519,7 +2519,7 @@ kubectl exec -it "$FORTIO_POD"  -c fortio -- /usr/bin/fortio load -curl http://h
 
 
 
-```json
+```bash
 root@node1:~/istio-1.16.0# FORTIO_POD=$(kubectl get pods -lapp=fortio -o 'jsonpath={.items[0].metadata.name}')
 root@node1:~/istio-1.16.0# kubectl exec -it "$FORTIO_POD"  -c fortio -- /usr/bin/fortio load -curl http://httpbin:8000/get
 HTTP/1.1 200 OK
@@ -2769,7 +2769,7 @@ kubectl delete -f samples/bookinfo/networking/virtual-service-all-v1.yaml
 
 ## 2.流量镜像
 
-创建httpbin-v1 和 httpbin-v2
+创建`httpbin-v1` 和 `httpbin-v2`
 
 ```bash
 kubectl apply -f istiolabmanual/httpbin-v1.yaml  
