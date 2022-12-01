@@ -681,33 +681,218 @@ controlplane $
 ## 1.动态路由
 
 （可选）启用默认目标规则
+
+```bash
 kubectl apply -f samples/bookinfo/networking/destination-rule-all.yaml
+```
+
+
 
 查看目标规则
+
+```bash
 nano samples/bookinfo/networking/destination-rule-all.yaml
+```
+
+
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: productpage
+spec:
+  host: productpage
+  subsets:
+  - name: v1
+    labels:
+      version: v1
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: reviews
+spec:
+  host: reviews
+  subsets:
+  - name: v1
+    labels:
+      version: v1
+  - name: v2
+    labels:
+      version: v2
+  - name: v3
+    labels:
+      version: v3
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: ratings
+spec:
+  host: ratings
+  subsets:
+  - name: v1
+    labels:
+      version: v1
+  - name: v2
+    labels:
+      version: v2
+  - name: v2-mysql
+    labels:
+      version: v2-mysql
+  - name: v2-mysql-vm
+    labels:
+      version: v2-mysql-vm
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: details
+spec:
+  host: details
+  subsets:
+  - name: v1
+    labels:
+      version: v1
+  - name: v2
+    labels:
+      version: v2
+---
+```
+
+
 
 创建将review流量都指向v1虚拟服务
+
+```bash
 kubectl apply -f samples/bookinfo/networking/virtual-service-all-v1.yaml
+```
+
+
 
 查看该虚拟服务
+
+```
 nano samples/bookinfo/networking/virtual-service-all-v1.yaml
+```
+
+
 
 这个配置文件明确定义了任何情况下只呈现v1版本的reviews
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: productpage
+spec:
+  hosts:
+  - productpage
+  http:
+  - route:
+    - destination:
+        host: productpage
+        subset: v1
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: reviews
+spec:
+  hosts:
+  - reviews
+  http:
+  - route:
+    - destination:
+        host: reviews
+        subset: v1
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: ratings
+spec:
+  hosts:
+  - ratings
+  http:
+  - route:
+    - destination:
+        host: ratings
+        subset: v1
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: details
+spec:
+  hosts:
+  - details
+  http:
+  - route:
+    - destination:
+        host: details
+        subset: v1
+---
+```
+
+
+
 使用浏览器查看效果,	即使反复F5，也是无星星版
 
+![image-20221201115502082](manual.assets/image-20221201115502082.png)
+
 创建将登录用户的review流量都指向v2的虚拟服务
+
+```bash
 kubectl apply -f  samples/bookinfo/networking/virtual-service-reviews-test-v2.yaml
+```
+
+
 
 Jason同志应该可以看到黑星星
 
-查看该虚拟服务
-nano samples/bookinfo/networking/virtual-service-reviews-test-v2.yaml
+![image-20221201115541479](manual.assets/image-20221201115541479.png)
 
-使用浏览器以jason登陆查看效果
+查看该虚拟服务
+
+```bash
+nano samples/bookinfo/networking/virtual-service-reviews-test-v2.yaml
+```
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: reviews
+spec:
+  hosts:
+    - reviews
+  http:
+  - match:
+    - headers:
+        end-user:
+          exact: jason
+    route:
+    - destination:
+        host: reviews
+        subset: v2
+  - route:
+    - destination:
+        host: reviews
+        subset: v1
+```
+
+
 
 清理环境
+
+```bash
 kubectl delete -f samples/bookinfo/networking/virtual-service-all-v1.yaml
 kubectl delete -f samples/bookinfo/networking/virtual-service-reviews-test-v2.yaml
+```
+
+
 
 ## 2.流量转移
 
