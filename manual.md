@@ -1855,7 +1855,14 @@ kubectl delete --ignore-not-found=true -f samples/httpbin/httpbin.yaml
 查看istio 系统服务，确认egress gateway 组件正常运行
 
 ```bash
-kubectl get svc -n istio-system
+kubectl get svc -n istio-system | grep egress
+```
+
+
+
+```bash
+root@node1:~/istio-1.16.0# kubectl get svc -n istio-system | grep egress
+istio-egressgateway    ClusterIP      10.105.229.85    <none>        80/TCP,443/TCP   
 ```
 
 
@@ -1863,7 +1870,14 @@ kubectl get svc -n istio-system
 查看istio 系统pod
 
 ```bash
-kubectl get pod -n istio-system
+kubectl get pod -n istio-system | grep egress
+```
+
+
+
+```bash
+root@node1:~/istio-1.16.0# kubectl get pod -n istio-system | grep egress
+istio-egressgateway-d84b5f89f-558m4    1/1     Running   0          12m
 ```
 
 
@@ -1892,10 +1906,43 @@ kubectl  apply -f  istiolabmanual/egressse.yaml
 
 
 
+查看egress service entry配置文件
+
+```bash
+nano istiolabmanual/egressse.yaml 
+```
+
+
+
+```bash
+apiVersion: networking.istio.io/v1alpha3
+kind: ServiceEntry
+metadata:
+  name: httpbin
+spec:
+  hosts:
+  - httpbin.org
+  ports:
+  - number: 80
+    name: http-port
+    protocol: HTTP
+  resolution: DNS
+```
+
+
+
 检查Service Entry
 
 ```bash
 kubectl get se
+```
+
+
+
+```bash
+root@node1:~/istio-1.16.0# kubectl get se
+NAME      HOSTS             LOCATION   RESOLUTION   AGE
+httpbin   ["httpbin.org"]              DNS          104s
 ```
 
 
@@ -1908,6 +1955,15 @@ kubectl exec -it $SOURCE_POD -c sleep -- curl http://httpbin.org/ip
 
 
 
+```bash
+root@node1:~/istio-1.16.0# kubectl exec -it $SOURCE_POD -c sleep -- curl http://httpbin.org/ip
+{
+  "origin": "20.205.45.50"
+}
+```
+
+
+
 检查sidecar里的proxy日志
 
 ```bash
@@ -1915,6 +1971,20 @@ kubectl logs $SOURCE_POD -c istio-proxy | tail
 ```
 
 
+
+```json
+root@node1:~/istio-1.16.0# kubectl logs $SOURCE_POD -c istio-proxy | tail
+2022-12-01T07:52:39.719206Z     info    cache   returned workload certificate from cache        ttl=23h59m59.280795108s
+2022-12-01T07:52:39.719382Z     info    cache   returned workload trust anchor from cache       ttl=23h59m59.280627706s
+2022-12-01T07:52:39.719501Z     info    ads     SDS: PUSH request for node:sleep-75bbc86479-8dv7p.default resources:1 size:4.0kB resource:default
+2022-12-01T07:52:39.719557Z     info    ads     SDS: PUSH request for node:sleep-75bbc86479-8dv7p.default resources:1 size:1.1kB resource:ROOTCA
+2022-12-01T07:52:39.719666Z     info    cache   returned workload trust anchor from cache       ttl=23h59m59.280338602s
+2022-12-01T07:52:40.051272Z     info    Readiness succeeded in 5.666123916s
+2022-12-01T07:52:40.051666Z     info    Envoy proxy is ready
+2022-12-01T07:52:44.407739Z     warn    HTTP request failed: Get "http://169.254.169.254/metadata/instance?api-version=2019-08-15": context deadline exceeded (Client.Timeout exceeded while awaiting headers)
+2022-12-01T07:52:44.407773Z     warn    Could not unmarshal response: unexpected end of JSON input:
+[2022-12-01T07:55:06.694Z] "GET /ip HTTP/1.1" 200 - via_upstream - "-" 0 31 608 607 "-" "curl/7.81.0-DEV" "e839b6e0-060c-9c78-9f97-26dda40d94d0" "httpbin.org" "54.166.148.227:80" outbound|80||httpbin.org 10.244.104.16:55424 3.215.37.86:80 10.244.104.16:43594 - default
+```
 
 注意观察，此处的`upstream_cluster："outbound|80||httpbin.org"`
 
@@ -1930,10 +2000,52 @@ kubectl get dr
 
 
 
+```bash
+root@node1:~/istio-1.16.0# kubectl get vs
+NAME       GATEWAYS               HOSTS   AGE
+bookinfo   ["bookinfo-gateway"]   ["*"]   55m
+root@node1:~/istio-1.16.0#
+root@node1:~/istio-1.16.0# kubectl get dr
+NAME          HOST          AGE
+details       details       54m
+productpage   productpage   54m
+ratings       ratings       54m
+reviews       reviews       54m
+```
+
+
+
 创建egress gateway
 
 ```bash
 kubectl  apply -f  istiolabmanual/egressgw.yaml 
+```
+
+
+
+查看egress gateway的配置文件
+
+```bash
+nano istiolabmanual/egressgw.yaml
+```
+
+
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: istio-egressgateway
+spec:
+  selector:
+    istio: egressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - httpbin.org
 ```
 
 
@@ -1946,10 +2058,73 @@ kubectl get gw
 
 
 
+```bash
+root@node1:~/istio-1.16.0# kubectl get gw
+NAME                  AGE
+bookinfo-gateway      56m
+istio-egressgateway   83s
+```
+
+
+
 创建virtual service，将流量引导到egress gateway
 
 ```bash
 kubectl  apply -f  istiolabmanual/egressvs.yaml 
+```
+
+
+
+查看egress virtual service 配置文件
+
+```
+nano istiolabmanual/egressvs.yaml 
+```
+
+
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: vs-for-egressgateway
+spec:
+  hosts:
+  - httpbin.org
+  gateways:
+  - istio-egressgateway
+  - mesh
+  http:
+  - match:
+    - gateways:
+      - mesh
+      port: 80
+    route:
+    - destination:
+        host: istio-egressgateway.istio-system.svc.cluster.local
+        subset: httpbin
+        port:
+          number: 80
+      weight: 100
+  - match:
+    - gateways:
+      - istio-egressgateway
+      port: 80
+    route:
+    - destination:
+        host: httpbin.org
+        port:
+          number: 80
+      weight: 100
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: dr-for-egressgateway
+spec:
+  host: istio-egressgateway.istio-system.svc.cluster.local
+  subsets:
+  - name: httpbin
 ```
 
 
@@ -1961,10 +2136,37 @@ kubectl get vs
 kubectl get dr
 ```
 
+
+
+```bash
+root@node1:~/istio-1.16.0# kubectl get vs
+NAME                   GATEWAYS                         HOSTS             AGE
+bookinfo               ["bookinfo-gateway"]             ["*"]             59m
+vs-for-egressgateway   ["istio-egressgateway","mesh"]   ["httpbin.org"]   89s
+root@node1:~/istio-1.16.0# kubectl get dr
+NAME                   HOST                                                 AGE
+details                details                                              59m
+dr-for-egressgateway   istio-egressgateway.istio-system.svc.cluster.local   93s
+productpage            productpage                                          59m
+ratings                ratings                                              59m
+reviews                reviews                                              59m
+```
+
+
+
 从sleep上访问外网
 
 ```bash
 kubectl exec -it $SOURCE_POD -c sleep -- curl http://httpbin.org/ip
+```
+
+
+
+```bash
+root@node1:~/istio-1.16.0# kubectl exec -it $SOURCE_POD -c sleep -- curl http://httpbin.org/ip
+{
+  "origin": "10.244.104.16, 20.205.45.50"
+}
 ```
 
  	注意：此处的ip地址发生了变化
@@ -1975,6 +2177,23 @@ kubectl exec -it $SOURCE_POD -c sleep -- curl http://httpbin.org/ip
 
 ```bash
 kubectl logs $SOURCE_POD -c istio-proxy | tail
+```
+
+
+
+```json
+root@node1:~/istio-1.16.0# kubectl logs $SOURCE_POD -c istio-proxy | tail
+2022-12-01T07:52:39.719382Z     info    cache   returned workload trust anchor from cache       ttl=23h59m59.280627706s
+2022-12-01T07:52:39.719501Z     info    ads     SDS: PUSH request for node:sleep-75bbc86479-8dv7p.default resources:1 size:4.0kB resource:default
+2022-12-01T07:52:39.719557Z     info    ads     SDS: PUSH request for node:sleep-75bbc86479-8dv7p.default resources:1 size:1.1kB resource:ROOTCA
+2022-12-01T07:52:39.719666Z     info    cache   returned workload trust anchor from cache       ttl=23h59m59.280338602s
+2022-12-01T07:52:40.051272Z     info    Readiness succeeded in 5.666123916s
+2022-12-01T07:52:40.051666Z     info    Envoy proxy is ready
+2022-12-01T07:52:44.407739Z     warn    HTTP request failed: Get "http://169.254.169.254/metadata/instance?api-version=2019-08-15": context deadline exceeded (Client.Timeout exceeded while awaiting headers)
+2022-12-01T07:52:44.407773Z     warn    Could not unmarshal response: unexpected end of JSON input:
+[2022-12-01T07:55:06.694Z] "GET /ip HTTP/1.1" 200 - via_upstream - "-" 0 31 608 607 "-" "curl/7.81.0-DEV" "e839b6e0-060c-9c78-9f97-26dda40d94d0" "httpbin.org" "54.166.148.227:80" outbound|80||httpbin.org 10.244.104.16:55424 3.215.37.86:80 10.244.104.16:43594 - default
+[2022-12-01T08:01:34.332Z] "GET /ip HTTP/1.1" 200 - via_upstream - "-" 0 46 614 614 "-" "curl/7.81.0-DEV" "81f48ace-057e-978a-85b4-1bcecdb48e27" "httpbin.org" "10.244.135.13:8080" outbound|80|httpbin|istio-egressgateway.istio-system.svc.cluster.local 10.244.104.16:47570 54.166.148.227:80 10.244.104.16:57680 - -
+
 ```
 
 注意观察，启用了`egress gateway`之后此处的`upstream_cluster："outbound|80|httpbin|istio-egressgateway.istio-system.svc.cluster.local"`
@@ -2012,6 +2231,31 @@ kubectl apply -f istiolabmanual/reviewsv2.yaml
 
 
 
+查看配置文件
+
+```yaml
+nano istiolabmanual/reviewsv2.yaml
+```
+
+
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: reviews
+spec:
+  hosts:
+    - reviews
+  http:
+  - route:
+    - destination:
+        host: reviews
+        subset: v2
+```
+
+
+
 查看bookinfo页面，看黑星星
 
 
@@ -2020,6 +2264,35 @@ kubectl apply -f istiolabmanual/reviewsv2.yaml
 
 ```bash
 kubectl apply -f istiolabmanual/delay.yaml 
+```
+
+
+
+查看配置文件
+
+```yaml
+nano istiolabmanual/delay.yaml 
+```
+
+
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: ratings
+spec:
+  hosts:
+  - ratings
+  http:
+  - fault:
+      delay:
+        percent: 100
+        fixedDelay: 2s
+    route:
+    - destination:
+        host: ratings
+        subset: v1
 ```
 
 
@@ -2048,15 +2321,52 @@ kubectl apply -f istiolabmanual/timeout.yaml
 kubectl apply -f istiolabmanual/retry.yaml 
 ```
 
- 	
+ 
 
-从bookinfo页面上刷新一次，查看日志看是否有两次重试
+查看超时配置文件
+
+```bash
+nano istiolabmanual/retry.yaml
+```
+
+
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: reviews
+spec:
+  hosts:
+  - reviews
+  http:
+  - route:
+    - destination:
+        host: reviews
+        subset: v2
+    timeout: 1s
+```
+
+​	
+
+从bookinfo页面上刷新一次
+
+![image-20221201165359989](manual.assets/image-20221201165359989.png)
+
+
+
+查看日志看是否有两次重试
 
 ```bash
 kubectl logs -f ratings-v1-xxxxx -c istio-proxy
 ```
 
 
+
+```json
+[2022-12-01T08:53:38.675Z] "GET /ratings/0 HTTP/1.1" 200 - via_upstream - "-" 0 48 1 0 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:107.0) Gecko/20100101 Firefox/107.0" "7b7596ea-aa34-98f9-9d7a-e17fbd58cdf3" "ratings:9080" "10.244.135.9:9080" inbound|9080|| 127.0.0.6:35157 10.244.135.9:9080 10.244.135.10:50698 outbound_.9080_.v1_.ratings.default.svc.cluster.local default
+[2022-12-01T08:53:39.688Z] "GET /ratings/0 HTTP/1.1" 200 - via_upstream - "-" 0 48 1 0 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:107.0) Gecko/20100101 Firefox/107.0" "7b7596ea-aa34-98f9-9d7a-e17fbd58cdf3" "ratings:9080" "10.244.135.9:9080" inbound|9080|| 127.0.0.6:58597 10.244.135.9:9080 10.244.135.10:49704 outbound_.9080_.v1_.ratings.default.svc.cluster.local default
+```
 
 注意观察日志中的两个条目的`path`和`start_time`
 
@@ -2067,6 +2377,8 @@ kubectl logs -f ratings-v1-xxxxx -c istio-proxy
 ```bash
 kubectl delete -f samples/bookinfo/networking/virtual-service-all-v1.yaml
 ```
+
+
 
 
 
@@ -2088,10 +2400,104 @@ kubectl apply -f istiolabmanual/circuitbreaking.yaml
 
 
 
+查看熔断配置文件
+
+```bash
+nano istiolabmanual/circuitbreaking.yaml
+```
+
+
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: httpbin
+spec:
+  host: httpbin
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 1
+      http:
+        http1MaxPendingRequests: 1
+        maxRequestsPerConnection: 1
+    outlierDetection:
+      consecutive5xxErrors: 1
+      interval: 1s
+      baseEjectionTime: 3m
+      maxEjectionPercent: 100
+```
+
+
+
 查看DestinationRule 
 
 ```bash
 kubectl describe dr httpbin 
+```
+
+
+
+```bash
+root@node1:~/istio-1.16.0# kubectl describe dr httpbin
+Name:         httpbin
+Namespace:    default
+Labels:       <none>
+Annotations:  <none>
+API Version:  networking.istio.io/v1beta1
+Kind:         DestinationRule
+Metadata:
+  Creation Timestamp:  2022-12-01T09:01:01Z
+  Generation:          1
+  Managed Fields:
+    API Version:  networking.istio.io/v1alpha3
+    Fields Type:  FieldsV1
+    fieldsV1:
+      f:metadata:
+        f:annotations:
+          .:
+          f:kubectl.kubernetes.io/last-applied-configuration:
+      f:spec:
+        .:
+        f:host:
+        f:trafficPolicy:
+          .:
+          f:connectionPool:
+            .:
+            f:http:
+              .:
+              f:http1MaxPendingRequests:
+              f:maxRequestsPerConnection:
+            f:tcp:
+              .:
+              f:maxConnections:
+          f:outlierDetection:
+            .:
+            f:baseEjectionTime:
+            f:consecutive5xxErrors:
+            f:interval:
+            f:maxEjectionPercent:
+    Manager:         kubectl-client-side-apply
+    Operation:       Update
+    Time:            2022-12-01T09:01:01Z
+  Resource Version:  20544
+  UID:               8db2a2a8-f121-4707-a8d3-9ce8e8f4f449
+Spec:
+  Host:  httpbin
+  Traffic Policy:
+    Connection Pool:
+      Http:
+        http1MaxPendingRequests:      1
+        Max Requests Per Connection:  1
+      Tcp:
+        Max Connections:  1
+    Outlier Detection:
+      Base Ejection Time:    3m
+      consecutive5xxErrors:  1
+      Interval:              1s
+      Max Ejection Percent:  100
+Events:                      <none>
 ```
 
 
@@ -2113,10 +2519,54 @@ kubectl exec -it "$FORTIO_POD"  -c fortio -- /usr/bin/fortio load -curl http://h
 
 
 
+```json
+root@node1:~/istio-1.16.0# FORTIO_POD=$(kubectl get pods -lapp=fortio -o 'jsonpath={.items[0].metadata.name}')
+root@node1:~/istio-1.16.0# kubectl exec -it "$FORTIO_POD"  -c fortio -- /usr/bin/fortio load -curl http://httpbin:8000/get
+HTTP/1.1 200 OK
+server: envoy
+date: Thu, 01 Dec 2022 09:03:34 GMT
+content-type: application/json
+content-length: 594
+access-control-allow-origin: *
+access-control-allow-credentials: true
+x-envoy-upstream-service-time: 27
+
+{
+  "args": {},
+  "headers": {
+    "Host": "httpbin:8000",
+    "User-Agent": "fortio.org/fortio-1.17.1",
+    "X-B3-Parentspanid": "9d922efa9abce5eb",
+    "X-B3-Sampled": "1",
+    "X-B3-Spanid": "7ac5bf604849d79b",
+    "X-B3-Traceid": "8295319ca4c94cc09d922efa9abce5eb",
+    "X-Envoy-Attempt-Count": "1",
+    "X-Forwarded-Client-Cert": "By=spiffe://cluster.local/ns/default/sa/httpbin;Hash=53b68132bb6f26d82a22d779c2506fb18000d56a56f308d67e6756570004b994;Subject=\"\";URI=spiffe://cluster.local/ns/default/sa/default"
+  },
+  "origin": "127.0.0.6",
+  "url": "http://httpbin:8000/get"
+}
+```
+
+
+
 触发熔断  2个并发，执行20次
 
 ```bash
 kubectl exec -it "$FORTIO_POD"  -c fortio -- /usr/bin/fortio load -c 2 -qps 0 -n 20 -loglevel Warning http://httpbin:8000/get
+```
+
+
+
+```bash
+...
+Sockets used: 11 (for perfect keepalive, would be 2)
+Jitter: false
+Code 200 : 10 (50.0 %)
+Code 503 : 10 (50.0 %)
+Response Header Sizes : count 20 avg 115.25 +/- 115.3 min 0 max 231 sum 2305
+Response Body/Total Sizes : count 20 avg 532.75 +/- 291.8 min 241 max 825 sum 10655
+All done 20 calls (plus 0 warmup) 10.408 ms avg, 185.8 qps
 ```
 
 
@@ -2129,13 +2579,39 @@ kubectl exec -it "$FORTIO_POD"  -c fortio -- /usr/bin/fortio load -c 3 -qps 0 -n
 
 
 
+```bash
+...
+Sockets used: 23 (for perfect keepalive, would be 3)
+Jitter: false
+Code 200 : 8 (26.7 %)
+Code 503 : 22 (73.3 %)
+Response Header Sizes : count 30 avg 61.5 +/- 102 min 0 max 231 sum 1845
+Response Body/Total Sizes : count 30 avg 396.63333 +/- 258.1 min 241 max 825 sum 11899
+All done 30 calls (plus 0 warmup) 5.330 ms avg, 452.0 qps
+```
+
+
+
 查看熔断指标
 
 ```bash
 kubectl exec "$FORTIO_POD" -c istio-proxy -- pilot-agent request GET stats | grep httpbin | grep pending
 ```
 
- 	`overflow`即是被熔断的访问次数
+
+
+```bash
+root@node1:~/istio-1.16.0# kubectl exec "$FORTIO_POD" -c istio-proxy -- pilot-agent request GET stats | grep httpbin | grep pending
+cluster.outbound|8000||httpbin.default.svc.cluster.local.circuit_breakers.default.remaining_pending: 1
+cluster.outbound|8000||httpbin.default.svc.cluster.local.circuit_breakers.default.rq_pending_open: 0
+cluster.outbound|8000||httpbin.default.svc.cluster.local.circuit_breakers.high.rq_pending_open: 0
+cluster.outbound|8000||httpbin.default.svc.cluster.local.upstream_rq_pending_active: 0
+cluster.outbound|8000||httpbin.default.svc.cluster.local.upstream_rq_pending_failure_eject: 0
+cluster.outbound|8000||httpbin.default.svc.cluster.local.upstream_rq_pending_overflow: 42
+cluster.outbound|8000||httpbin.default.svc.cluster.local.upstream_rq_pending_total: 29
+```
+
+ `overflow`即是被熔断的访问次数
 
 
 
