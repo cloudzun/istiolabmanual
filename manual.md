@@ -1972,7 +1972,7 @@ kubectl logs $SOURCE_POD -c istio-proxy | tail
 
 
 
-```json
+```bash
 root@node1:~/istio-1.16.0# kubectl logs $SOURCE_POD -c istio-proxy | tail
 2022-12-01T07:52:39.719206Z     info    cache   returned workload certificate from cache        ttl=23h59m59.280795108s
 2022-12-01T07:52:39.719382Z     info    cache   returned workload trust anchor from cache       ttl=23h59m59.280627706s
@@ -2181,7 +2181,7 @@ kubectl logs $SOURCE_POD -c istio-proxy | tail
 
 
 
-```json
+```bash
 root@node1:~/istio-1.16.0# kubectl logs $SOURCE_POD -c istio-proxy | tail
 2022-12-01T07:52:39.719382Z     info    cache   returned workload trust anchor from cache       ttl=23h59m59.280627706s
 2022-12-01T07:52:39.719501Z     info    ads     SDS: PUSH request for node:sleep-75bbc86479-8dv7p.default resources:1 size:4.0kB resource:default
@@ -2363,7 +2363,7 @@ kubectl logs -f ratings-v1-xxxxx -c istio-proxy
 
 
 
-```json
+```bash
 [2022-12-01T08:53:38.675Z] "GET /ratings/0 HTTP/1.1" 200 - via_upstream - "-" 0 48 1 0 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:107.0) Gecko/20100101 Firefox/107.0" "7b7596ea-aa34-98f9-9d7a-e17fbd58cdf3" "ratings:9080" "10.244.135.9:9080" inbound|9080|| 127.0.0.6:35157 10.244.135.9:9080 10.244.135.10:50698 outbound_.9080_.v1_.ratings.default.svc.cluster.local default
 [2022-12-01T08:53:39.688Z] "GET /ratings/0 HTTP/1.1" 200 - via_upstream - "-" 0 48 1 0 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:107.0) Gecko/20100101 Firefox/107.0" "7b7596ea-aa34-98f9-9d7a-e17fbd58cdf3" "ratings:9080" "10.244.135.9:9080" inbound|9080|| 127.0.0.6:58597 10.244.135.9:9080 10.244.135.10:49704 outbound_.9080_.v1_.ratings.default.svc.cluster.local default
 ```
