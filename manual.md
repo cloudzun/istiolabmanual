@@ -897,207 +897,480 @@ kubectl delete -f samples/bookinfo/networking/virtual-service-reviews-test-v2.ya
 ## 2.流量转移
 
 （可选）启用默认目标规则
+
+```bash
 kubectl apply -f samples/bookinfo/networking/destination-rule-all.yaml
+```
+
+
 
 使用浏览器查看页面效果，主要是关注reviews的版本
+
+
 
 将所有流量指向reviews:v1
+
+```bash
 kubectl apply -f samples/bookinfo/networking/virtual-service-all-v1.yaml
+```
 
 使用浏览器查看页面效果，主要是关注reviews的版本
+
+
 
 将50% 的流量从 reviews:v1 转移到 reviews:v3
+
+```bash
 kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-50-v3.yaml
+```
+
+
 
 查看该虚拟服务
+
+```bash
 nano samples/bookinfo/networking/virtual-service-reviews-50-v3.yaml
+```
 
 使用浏览器查看页面效果，主要是关注reviews的版本
 
+
+
 将 100% 的流量路由到 reviews:v3
+
+```bash
 kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-v3.yaml
+```
+
+
 
 查看该虚拟服务
+
+```bash
 nano samples/bookinfo/networking/virtual-service-reviews-v3.yaml
+```
+
+
 
 使用浏览器查看页面效果，主要是关注reviews的版本
 
 清理
+
+```bash
 kubectl delete -f samples/bookinfo/networking/virtual-service-all-v1.yaml
+```
+
+
 
 ## 3.网关
 
 查看现有网关
+
+```bash
 kubectl get gw
+```
+
+
 
 增加网关
+
+```bash
 kubectl apply -f istiolabmanual/gateway.yaml 
+```
+
+
 
 查看现有网关
+
+```bash
 kubectl get gw
+```
+
+
 
 查看该网关配置
+
+```bash
 kubectl describe gw test-gateway
+```
+
+
 
 增加虚拟服务
+
+```bash
 kubectl apply -f istiolabmanual/virtualservice.yaml
+```
+
+
 
 查看虚拟服务
+
+```bash
 kubectl get vs
+```
+
+
 
 查看该虚拟服务配置
+
+```bash
 kubectl describe vs test-gateway
+```
 
 随后使用浏览器访问/details/0 和 /health，检查效果
 
+
+
 清理环境
+
+```bash
 kubectl delete -f istiolabmanual/gateway.yaml 
 kubectl delete -f istiolabmanual/virtualservice.yaml
+```
+
+
 
 ## 4.服务入口
 
 安装sleep应用
+
+```bash
 kubectl apply -f samples/sleep/sleep.yaml
+```
+
+
 
 查看pod
+
+```bash
 kubectl  get pod 
+```
+
+
 
 设置source_pod 变量
+
+```bash
 export SOURCE_POD=$(kubectl get pod -l app=sleep -o jsonpath={.items..metadata.name})
+```
+
+
 
 查看出站访问效果
+
+```bash
 kubectl exec -it $SOURCE_POD -c sleep -- curl http://httpbin.org/headers
+```
+
+
 
 关闭默认出站访问
+
+```bash
 istioctl install  --set meshConfig.outboundTrafficPolicy.mode=REGISTRY_ONLY -y
+```
+
+
 
 查看出站访问效果
+
+```bash
 kubectl exec -it $SOURCE_POD -c sleep -- curl http://httpbin.org/headers
+```
+
+
 
 创建指向 httpbin.org 的ServiceEntry
+
+```bash
 kubectl apply -f istiolabmanual/serviceentry.yaml
+```
+
+
 
 查看ServiceEntry
+
+```bash
 kubectl get se
+```
+
+
 
 稍等数秒钟之后，再次查看出站访问效果
+
+```bash
 kubectl exec -it $SOURCE_POD -c sleep -- curl http://httpbin.org/ip
+```
+
+
 
 查看该ServiceEntry配置
+
+```bash
 kubectl describe se httpbin-ext
+```
+
+
 
 清理
+
+```bash
 kubectl delete -f samples/sleep/sleep.yaml
 kubectl delete -f istiolabmanual/serviceentry.yaml
 istioctl install --set profile=demo -y
+```
+
+
 
 ## 5.Ingress
 
 创建httpbin服务
+
+```bash
 kubectl apply -f samples/httpbin/httpbin.yaml
+```
+
+
 
 查看pod 
+
+```bash
 kubectl get pods
+```
+
+
 
 查看ingressgateway
+
+```bash
 kubectl get svc istio-ingressgateway -n istio-system
+```
+
+
 
 设置ingress主机和端口变量
+
+```bash
 export INGRESS_HOST=$(kubectl get po -l istio=ingressgateway -n istio-system -o jsonpath='{.items[0].status.hostIP}')
 export INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="http2")].nodePort}')
 export SECURE_INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="https")].nodePort}')
 export TCP_INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="tcp")].nodePort}')
+```
+
+
 
 创建ingress gateway，定义接入点 
+
+```bash
 kubectl apply -f  istiolabmanual/ingressgateway.yaml 
+```
+
+
 
 创建virtual service 定义路由规则 
+
+```bash
 kubectl apply -f istiolabmanual/ingressvs.yaml 
+```
+
+
 
 查看Virtual Service信息，重点关注服务 网关和主机的绑定关系
+
+```bash
 kubectl get vs
+```
+
+
 
 访问已发布的httpin 接口
+
+```bash
 curl -I -HHost:httpbin.example.com http://$INGRESS_HOST:$INGRESS_PORT/status/200
 
 curl -I -HHost:httpbin.example.com http://$INGRESS_HOST:$INGRESS_PORT/delay/2
+```
+
+
 
 访问未经定义的目标
+
+```bash
 curl -I -HHost:httpbin.example.com http://$INGRESS_HOST:$INGRESS_PORT/headers
+```
+
+
 
 设置规则将headers服务发布到外网 
+
+```bash
 kubectl apply -f istiolabmanual/ingressgateway2.yaml 
+```
+
+
 
 使用浏览器加 /headers 在外网进行访问
 
+
+
 查看Virtual Service信息，重点关注服务 网关和主机的绑定关系
+
+```bash
 kubectl get vs
+```
+
+
 
 清理资源
+
+```bash
 kubectl delete gateway httpbin-gateway
 kubectl delete virtualservice httpbin
 kubectl delete --ignore-not-found=true -f samples/httpbin/httpbin.yaml
+```
+
+
 
 ## 6.Egress
 
 查看istio 系统服务，确认egress gateway 组件正常运行
+
+```bash
 kubectl get svc -n istio-system
+```
+
+
 
 查看istio 系统pod
+
+```bash
 kubectl get pod -n istio-system
+```
+
+
 
 安装sleep应用
+
+```bash
 kubectl apply -f samples/sleep/sleep.yaml
+```
+
+
 
 设置source_pod 变量
+
+```bash
 export SOURCE_POD=$(kubectl get pod -l app=sleep -o jsonpath={.items..metadata.name})
+```
+
+
 
 为外部httpbin服务创建service entry
+
+```bash
 kubectl  apply -f  istiolabmanual/egressse.yaml 
+```
+
+
 
 检查Service Entry
+
+```bash
 kubectl get se
+```
+
+
 
 从sleep上访问外网
+
+```bash
 kubectl exec -it $SOURCE_POD -c sleep -- curl http://httpbin.org/ip
+```
+
+
 
 检查sidecar里的proxy日志
-kubectl logs $SOURCE_POD -c istio-proxy | tail
 
-注意观察，此处的upstream_cluster："outbound|80||httpbin.org"
+```bash
+kubectl logs $SOURCE_POD -c istio-proxy | tail
+```
+
+
+
+注意观察，此处的`upstream_cluster："outbound|80||httpbin.org"`
+
+
 
 查看Virtual Service 和 Destination Rule信息
+
+```bash
 kubectl get vs
 
 kubectl get dr
+```
+
+
 
 创建egress gateway
+
+```bash
 kubectl  apply -f  istiolabmanual/egressgw.yaml 
+```
+
+
 
 查看gateway
+
+```bash
 kubectl get gw
+```
+
+
 
 创建virtual service，将流量引导到egress gateway
+
+```bash
 kubectl  apply -f  istiolabmanual/egressvs.yaml 
+```
+
+
 
 查看Virtual Service 和Destination Rule信息
+
+```bash
 kubectl get vs
 kubectl get dr
+```
 
 从sleep上访问外网
+
+```bash
 kubectl exec -it $SOURCE_POD -c sleep -- curl http://httpbin.org/ip
+```
+
  	注意：此处的ip地址发生了变化
 
-检查sidecar里的proxy日志，观察新的条目
-kubectl logs $SOURCE_POD -c istio-proxy | tail
 
-注意观察，启用了egress gateway之后此处的upstream_cluster："outbound|80|httpbin|istio-egressgateway.istio-system.svc.cluster.local"
+
+检查sidecar里的proxy日志，观察新的条目
+
+```bash
+kubectl logs $SOURCE_POD -c istio-proxy | tail
+```
+
+注意观察，启用了`egress gateway`之后此处的`upstream_cluster："outbound|80|httpbin|istio-egressgateway.istio-system.svc.cluster.local"`
+
+
 
 清理
+
+```bash
 kubectl delete -f samples/sleep/sleep.yaml
 kubectl delete -f  istiolabmanual/egressse.yaml 
 kubectl delete -f istiolabmanual/egressgw.yaml
 kubectl delete -f istiolabmanual/egressvs.yaml 
+```
 
 
 
