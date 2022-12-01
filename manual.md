@@ -2652,8 +2652,50 @@ kubectl apply -f samples/bookinfo/networking/virtual-service-ratings-test-delay.
 
 
 
+查看延时故障配置文件
+
+```bash
+nano samples/bookinfo/networking/virtual-service-ratings-test-delay.yaml
+```
+
+
+
+```yaml
+
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: ratings
+spec:
+  hosts:
+  - ratings
+  http:
+  - match:
+    - headers:
+        end-user:
+          exact: jason
+    fault:
+      delay:
+        percentage:
+          value: 100.0
+        fixedDelay: 7s
+    route:
+    - destination:
+        host: ratings
+        subset: v1
+  - route:
+    - destination:
+        host: ratings
+        subset: v1
+```
+
+
+
 分别使用匿名用户和jason查看bookinfo界面
  Jason 踩坑了 
+
+![image-20221201171239118](manual.assets/image-20221201171239118.png)
+
  普通群众情绪稳定
 
 
@@ -2666,8 +2708,51 @@ kubectl apply -f samples/bookinfo/networking/virtual-service-ratings-test-abort.
 
 
 
+查看注入故障配置文件
+
+```bash
+nano samples/bookinfo/networking/virtual-service-ratings-test-abort.yaml
+```
+
+
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: ratings
+spec:
+  hosts:
+  - ratings
+  http:
+  - match:
+    - headers:
+        end-user:
+          exact: jason
+    fault:
+      abort:
+        percentage:
+          value: 100.0
+        httpStatus: 500
+    route:
+    - destination:
+        host: ratings
+        subset: v1
+  - route:
+    - destination:
+        host: ratings
+        subset: v1
+```
+
+
+
+
+
 分别使用匿名用户和jason查看bookinfo界面 
   Jason 中招 
+
+![image-20221201171514787](manual.assets/image-20221201171514787.png)
+
   普通群众没事
 
 
@@ -2677,6 +2762,8 @@ kubectl apply -f samples/bookinfo/networking/virtual-service-ratings-test-abort.
 ```bash
 kubectl delete -f samples/bookinfo/networking/virtual-service-all-v1.yaml
 ```
+
+
 
 
 
@@ -2691,10 +2778,101 @@ kubectl apply -f istiolabmanual/httpbin-v2.yaml
 
 
 
+查看v1的定义文件
+
+```bash
+nano istiolabmanual/httpbin-v1.yaml
+```
+
+
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: httpbin-v1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: httpbin
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: httpbin
+        version: v1
+    spec:
+      containers:
+      - image: docker.io/kennethreitz/httpbin
+        imagePullPolicy: IfNotPresent
+        name: httpbin
+        command: ["gunicorn", "--access-logfile", "-", "-b", "0.0.0.0:80", "httpbin:app"]
+        ports:
+        - containerPort: 80
+```
+
+
+
 发布服务
 
 ```bash
 kubectl apply -f istiolabmanual/httpbinsvc.yaml
+```
+
+
+
+查看服务定义文件
+
+```bash
+nano istiolabmanual/httpbinsvc.yaml
+```
+
+
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: httpbin
+  labels:
+    app: httpbin
+spec:
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 80
+  selector:
+    app: httpbin
+```
+
+
+
+查看服务
+
+```bash
+kubectl describe svc httpbin
+```
+
+
+
+```bash
+root@node1:~/istio-1.16.0# kubectl describe svc httpbin
+Name:              httpbin
+Namespace:         default
+Labels:            app=httpbin
+Annotations:       <none>
+Selector:          app=httpbin
+Type:              ClusterIP
+IP Family Policy:  SingleStack
+IP Families:       IPv4
+IP:                10.106.199.214
+IPs:               10.106.199.214
+Port:              http  8000/TCP
+TargetPort:        80/TCP
+Endpoints:         10.244.104.18:80,10.244.135.16:80
+Session Affinity:  None
+Events:            <none>
 ```
 
 
@@ -2715,11 +2893,73 @@ kubectl apply -f istiolabmanual/httpbinvs.yaml
 
 
 
+查看路由规则文件
+
+```bash
+nano stiolabmanual/httpbinvs.yaml
+```
+
+
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: httpbin
+spec:
+  hosts:
+    - httpbin
+  http:
+  - route:
+    - destination:
+        host: httpbin
+        subset: v1
+      weight: 100
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: httpbin
+spec:
+  host: httpbin
+  subsets:
+  - name: v1
+    labels:
+      version: v1
+  - name: v2
+    labels:
+      version: v2
+```
+
+
+
+
+
 使用sleep访问服务
 
 ```bash
 export SLEEP_POD=$(kubectl get pod -l app=sleep -o jsonpath={.items..metadata.name})
 kubectl exec -it $SLEEP_POD -c sleep -- sh -c 'curl  http://httpbin:8000/headers' | python3 -m json.tool
+```
+
+
+
+```bash
+root@node1:~/istio-1.16.0# export SLEEP_POD=$(kubectl get pod -l app=sleep -o jsonpath={.items..metadata.name})
+root@node1:~/istio-1.16.0# kubectl exec -it $SLEEP_POD -c sleep -- sh -c 'curl  http://httpbin:8000/headers' | python3 -m json.tool
+{
+    "headers": {
+        "Accept": "*/*",
+        "Host": "httpbin:8000",
+        "User-Agent": "curl/7.81.0-DEV",
+        "X-B3-Parentspanid": "9d5d287f47ecd220",
+        "X-B3-Sampled": "1",
+        "X-B3-Spanid": "d6be1d30ff475d60",
+        "X-B3-Traceid": "7599f42a01151eab9d5d287f47ecd220",
+        "X-Envoy-Attempt-Count": "1",
+        "X-Forwarded-Client-Cert": "By=spiffe://cluster.local/ns/default/sa/default;Hash=0eba4506484820359556030d829573051b0f525ef9b6205fa5d88eed040e131b;Subject=\"\";URI=spiffe://cluster.local/ns/default/sa/sleep"
+    }
+}
 ```
 
 
@@ -2731,9 +2971,34 @@ export V1_POD=$(kubectl get pod -l app=httpbin,version=v1 -o jsonpath={.items..m
 kubectl logs -f $V1_POD -c httpbin
 ```
 
+
+
+```bash
+root@node1:~/istio-1.16.0# export V1_POD=$(kubectl get pod -l app=httpbin,version=v1 -o jsonpath={.items..metadata.name})
+root@node1:~/istio-1.16.0# kubectl logs -f $V1_POD -c httpbin
+[2022-12-01 09:16:59 +0000] [1] [INFO] Starting gunicorn 19.9.0
+[2022-12-01 09:16:59 +0000] [1] [INFO] Listening at: http://0.0.0.0:80 (1)
+[2022-12-01 09:16:59 +0000] [1] [INFO] Using worker: sync
+[2022-12-01 09:16:59 +0000] [9] [INFO] Booting worker with pid: 9
+127.0.0.6 - - [01/Dec/2022:09:29:11 +0000] "GET /headers HTTP/1.1" 200 527 "-" "curl/7.81.0-DEV"
+```
+
+
+
 ```bash
 export V2_POD=$(kubectl get pod -l app=httpbin,version=v2 -o jsonpath={.items..metadata.name})
 kubectl logs -f $V2_POD -c httpbin
+```
+
+
+
+```bash
+root@node1:~/istio-1.16.0# export V2_POD=$(kubectl get pod -l app=httpbin,version=v2 -o jsonpath={.items..metadata.name})
+root@node1:~/istio-1.16.0# kubectl logs -f $V2_POD -c httpbin
+[2022-12-01 09:17:18 +0000] [1] [INFO] Starting gunicorn 19.9.0
+[2022-12-01 09:17:18 +0000] [1] [INFO] Listening at: http://0.0.0.0:80 (1)
+[2022-12-01 09:17:18 +0000] [1] [INFO] Using worker: sync
+[2022-12-01 09:17:18 +0000] [10] [INFO] Booting worker with pid: 10
 ```
 
 
@@ -2746,11 +3011,61 @@ kubectl apply -f istiolabmanual/mirror.yaml --validate=false
 
 
 
+查看镜像规则文件
+
+```bash
+nano istiolabmanual/mirror.yaml
+```
+
+
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: httpbin
+spec:
+  hosts:
+    - httpbin
+  http:
+  - route:
+    - destination:
+        host: httpbin
+        subset: v1
+      weight: 100
+    mirror:
+      host: httpbin
+      subset: v2
+    mirrorPercent: 100
+```
+
+
+
 使用sleep访问服务
 
 ```bash
 export SLEEP_POD=$(kubectl get pod -l app=sleep -o jsonpath={.items..metadata.name})
 kubectl exec -it $SLEEP_POD -c sleep -- sh -c 'curl  http://httpbin:8000/headers' | python3 -m json.tool
+```
+
+
+
+```bash
+root@node1:~/istio-1.16.0# export SLEEP_POD=$(kubectl get pod -l app=sleep -o jsonpath={.items..metadata.name})
+root@node1:~/istio-1.16.0# kubectl exec -it $SLEEP_POD -c sleep -- sh -c 'curl  http://httpbin:8000/headers' | python3 -m json.tool
+{
+    "headers": {
+        "Accept": "*/*",
+        "Host": "httpbin:8000",
+        "User-Agent": "curl/7.81.0-DEV",
+        "X-B3-Parentspanid": "f5000d3241a11cbb",
+        "X-B3-Sampled": "1",
+        "X-B3-Spanid": "b0a32f1cbca43d0d",
+        "X-B3-Traceid": "0bf35512fb2b57abf5000d3241a11cbb",
+        "X-Envoy-Attempt-Count": "1",
+        "X-Forwarded-Client-Cert": "By=spiffe://cluster.local/ns/default/sa/default;Hash=0eba4506484820359556030d829573051b0f525ef9b6205fa5d88eed040e131b;Subject=\"\";URI=spiffe://cluster.local/ns/default/sa/sleep"
+    }
+}
 ```
 
 
@@ -2762,9 +3077,36 @@ export V1_POD=$(kubectl get pod -l app=httpbin,version=v1 -o jsonpath={.items..m
 kubectl logs -f $V1_POD -c httpbin
 ```
 
+
+
+```bash
+root@node1:~/istio-1.16.0# export V1_POD=$(kubectl get pod -l app=httpbin,version=v1 -o jsonpath={.items..metadata.name})
+root@node1:~/istio-1.16.0# kubectl logs -f $V1_POD -c httpbin
+[2022-12-01 09:16:59 +0000] [1] [INFO] Starting gunicorn 19.9.0
+[2022-12-01 09:16:59 +0000] [1] [INFO] Listening at: http://0.0.0.0:80 (1)
+[2022-12-01 09:16:59 +0000] [1] [INFO] Using worker: sync
+[2022-12-01 09:16:59 +0000] [9] [INFO] Booting worker with pid: 9
+127.0.0.6 - - [01/Dec/2022:09:29:11 +0000] "GET /headers HTTP/1.1" 200 527 "-" "curl/7.81.0-DEV"
+127.0.0.6 - - [01/Dec/2022:09:32:03 +0000] "GET /headers HTTP/1.1" 200 527 "-" "curl/7.81.0-DEV"
+```
+
+
+
 ```bash
 export V2_POD=$(kubectl get pod -l app=httpbin,version=v2 -o jsonpath={.items..metadata.name})
 kubectl logs -f $V2_POD -c httpbin
+```
+
+
+
+```bash
+root@node1:~/istio-1.16.0# export V2_POD=$(kubectl get pod -l app=httpbin,version=v2 -o jsonpath={.items..metadata.name})
+root@node1:~/istio-1.16.0# kubectl logs -f $V2_POD -c httpbin
+[2022-12-01 09:17:18 +0000] [1] [INFO] Starting gunicorn 19.9.0
+[2022-12-01 09:17:18 +0000] [1] [INFO] Listening at: http://0.0.0.0:80 (1)
+[2022-12-01 09:17:18 +0000] [1] [INFO] Using worker: sync
+[2022-12-01 09:17:18 +0000] [10] [INFO] Booting worker with pid: 10
+127.0.0.6 - - [01/Dec/2022:09:32:03 +0000] "GET /headers HTTP/1.1" 200 567 "-" "curl/7.81.0-DEV"
 ```
 
 
@@ -2777,6 +3119,8 @@ kubectl delete destinationrule httpbin
 kubectl delete deploy httpbin-v1 httpbin-v2 sleep
 kubectl delete svc httpbin 
 ```
+
+
 
 
 
