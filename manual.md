@@ -271,33 +271,6 @@ kubectl get svc,pod,hpa,pdb,Gateway,VirtualService -n istio-system
 
 
 
-可选步骤
-
-如果因为特殊的国情，导致上一步失败，使用这个步骤：
-
-```bash
-wget https://chengzhstor.blob.core.windows.net/k8slab/istio-1.13.2-linux-amd64.tar.gz
-tar xf istio-1.13.2-linux-amd64.tar.gz
-```
-
-
-
-进入下载目录，随着产品的迭代，此处的版本号可能不同，请大家依据屏幕提示进行后两步操作
-
-```bash
-cd istio-1.13.2/
-```
-
-
-
-设置环境变量
-
-```bash
-export PATH="$PATH:/root/istio-1.13.2/bin"
-```
-
-
-
 加载实验脚本目录
 
 ```bash
@@ -3724,7 +3697,36 @@ https://zhuanlan.zhihu.com/p/141775176
 
 
 
-# 清理整个环境
+# 备注
+
+## 国内安装可选方法
+
+如果直接下载istio失败，可以使用这个步骤下载1.16.0介质进行安装：
+
+```bash
+wget https://chengzhstor.blob.core.windows.net/k8slab/istio-1.16.0-linux-amd64.tar.gz
+tar xf istio-1.16.0-linux-amd64.tar.gz
+```
+
+
+
+进入下载目录，随着产品的迭代，此处的版本号可能不同，请大家依据屏幕提示进行后两步操作
+
+```bash
+cd istio-1.16.0/
+```
+
+
+
+设置环境变量
+
+```bash
+export PATH="$PATH:/root/istio-1.16.0/bin"
+```
+
+
+
+## 清理整个环境
 
 
 
