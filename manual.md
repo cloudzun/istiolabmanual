@@ -4060,7 +4060,7 @@ kubectl delete ns foo bar legacy
 
 创建包含 httpbin 和sleep样例的名称空间foo
 
-```
+```bash
 kubectl create ns foo
 kubectl apply -f <(istioctl kube-inject -f samples/httpbin/httpbin.yaml) -n foo
 kubectl apply -f <(istioctl kube-inject -f samples/sleep/sleep.yaml) -n foo
@@ -4070,48 +4070,122 @@ kubectl apply -f <(istioctl kube-inject -f samples/sleep/sleep.yaml) -n foo
 
 检查httpbin和sleep的通讯情况
 
-```
+```bash
 kubectl exec $(kubectl get pod -l app=sleep -n foo -o jsonpath={.items..metadata.name}) -c sleep -n foo -- curl http://httpbin.foo:8000/ip -s -o /dev/null -w "%{http_code}\n"
+```
+
+
+
+```bash
+root@node1:~/istio-1.16.0# kubectl exec $(kubectl get pod -l app=sleep -n foo -o jsonpath={.items..metadata.name}) -c sleep -n foo -- curl http://httpbin.foo:8000/ip -s -o /dev/null -w "%{http_code}\n"
+200
 ```
 
   一切正常，本来就是by default的吗
 
+
+
 为httpbin创建 request authentication policy
+
+```bash
 kubectl apply -f istiolabmanual/jwtra.yaml
+```
+
+
+
+查看验证策略
+
+```
+nano istiolabmanual/jwtra.yaml
+```
+
+
+
+```yaml
+apiVersion: "security.istio.io/v1beta1"
+kind: "RequestAuthentication"
+metadata:
+  name: "jwt-example"
+  namespace: foo
+spec:
+  selector:
+    matchLabels:
+      app: httpbin
+  jwtRules:
+  - issuer: "testing@secure.istio.io"
+    jwksUri: "https://raw.githubusercontent.com/istio/istio/release-1.5/security/tools/jwt/samples/jwks.json"
+```
 
 
 
 检查持有无效JWT的访问
 
-```
+```bash
 kubectl exec $(kubectl get pod -l app=sleep -n foo -o jsonpath={.items..metadata.name}) -c sleep -n foo -- curl "http://httpbin.foo:8000/headers" -s -o /dev/null -H "Authorization: Bearer invalidToken" -w "%{http_code}\n"
 ```
 
   理应不能访问，401没毛病
 
+``` bash
+root@node1:~/istio-1.16.0# kubectl exec $(kubectl get pod -l app=sleep -n foo -o jsonpath={.items..metadata.name}) -c sleep -n foo -- curl "http://httpbin.foo:8000/headers" -s -o /dev/null -H "Authorization: Bearer invalidToken" -w "%{http_code}\n"
+401
+```
+
 
 
 检查不持有JWT的访问， 
 
-```
+```bash
 kubectl exec $(kubectl get pod -l app=sleep -n foo -o jsonpath={.items..metadata.name}) -c sleep -n foo -- curl "http://httpbin.foo:8000/headers" -s -o /dev/null -w "%{http_code}\n"
 ```
 
   这居然也能成功，尴尬
 
+```bash
+root@node1:~/istio-1.16.0# kubectl exec $(kubectl get pod -l app=sleep -n foo -o jsonpath={.items..metadata.name}) -c sleep -n foo -- curl "http://httpbin.foo:8000/headers" -s -o /dev/null -w "%{http_code}\n"
+200
+```
+
 
 
 在foo上启用 authorization policy
 
-```
+```bash
 kubectl apply -f istiolabmanual/jwtap.yaml 
+```
+
+
+
+查看验证策略配置文件
+
+```bash
+nano istiolabmanual/jwtap.yaml
+```
+
+
+
+```yaml
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: require-jwt
+  namespace: foo
+spec:
+  selector:
+    matchLabels:
+      app: httpbin
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+       requestPrincipals: ["testing@secure.istio.io/testing@secure.istio.io"]
 ```
 
 
 
 设置指向JWT的Token变量
 
-```
+```bash
 TOKEN=$(curl https://raw.githubusercontent.com/istio/istio/release-1.5/security/tools/jwt/samples/demo.jwt -s) && echo $TOKEN | cut -d '.' -f2 - | base64 --decode -
 ```
 
@@ -4119,27 +4193,41 @@ TOKEN=$(curl https://raw.githubusercontent.com/istio/istio/release-1.5/security/
 
 使用有效JWT进行访问
 
-```
+```bash
 kubectl exec $(kubectl get pod -l app=sleep -n foo -o jsonpath={.items..metadata.name}) -c sleep -n foo -- curl "http://httpbin.foo:8000/headers" -s -o /dev/null -H "Authorization: Bearer $TOKEN" -w "%{http_code}\n"
+```
+
+正常,200
+
+```bash
+root@node1:~/istio-1.16.0# kubectl exec $(kubectl get pod -l app=sleep -n foo -o jsonpath={.items..metadata.name}) -c sleep -n foo -- curl "http://httpbin.foo:8000/headers" -s -o /dev/null -H "Authorization: Bearer $TOKEN" -w "%{http_code}\n"
+200
 ```
 
 
 
 再次验证不持有JWT的访问
 
-```
+```bash
 kubectl exec $(kubectl get pod -l app=sleep -n foo -o jsonpath={.items..metadata.name}) -c sleep -n foo -- curl "http://httpbin.foo:8000/headers" -s -o /dev/null -w "%{http_code}\n"
 ```
 
   授权策略启用之后，就没办法浑水摸鱼了，403了
 
+```bash
+root@node1:~/istio-1.16.0# kubectl exec $(kubectl get pod -l app=sleep -n foo -o jsonpath={.items..metadata.name}) -c sleep -n foo -- curl "http://httpbin.foo:8000/headers" -s -o /dev/null -w "%{http_code}\n"
+403
+```
+
 
 
 清理环境
 
-```
+```bash
 kubectl delete namespace foo
 ```
+
+
 
 
 
