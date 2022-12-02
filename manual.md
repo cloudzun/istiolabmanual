@@ -3442,10 +3442,80 @@ kubectl apply -f istiolabmanual/mygatewayv1.yaml
 
 
 
+查看gateway配置文件
+
+```bash
+nano istiolabmanual/mygatewayv1.yaml
+```
+
+
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: mygateway
+spec:
+  selector:
+    istio: ingressgateway # use istio default ingress gateway
+  servers:
+  - port:
+      number: 443
+      name: https-httpbin
+      protocol: HTTPS
+    tls:
+      mode: SIMPLE
+      credentialName: httpbin-credential
+    hosts:
+    - httpbin.example.com
+  - port:
+      number: 443
+      name: https-helloworld
+      protocol: HTTPS
+    tls:
+      mode: SIMPLE
+      credentialName: helloworld-credential
+    hosts:
+    - helloworld-v1.example.com
+```
+
+
+
 创建helloworld-v1的vs
 
 ```bash
 kubectl apply -f istiolabmanual/helloworld-v1vs.yaml
+```
+
+
+
+查看virtual server配置文件
+
+```bash
+nano istiolabmanual/helloworld-v1vs.yaml
+```
+
+
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: helloworld-v1
+spec:
+  hosts:
+  - helloworld-v1.example.com
+  gateways:
+  - mygateway
+  http:
+  - match:
+    - uri:
+        exact: /hello
+    route:
+    - destination:
+        host: helloworld-v1
+        port:
+          number: 5000
 ```
 
 
@@ -3461,6 +3531,25 @@ curl -v -HHost:helloworld-v1.example.com --resolve "helloworld-v1.example.com:$S
 
 
 
+```yaml
+...
+* TLSv1.3 (IN), TLS handshake, Newsession Ticket (4):
+* TLSv1.3 (IN), TLS handshake, Newsession Ticket (4):
+* old SSL session ID is stale, removing
+* Connection state changed (MAX_CONCURRENT_STREAMS == 2147483647)!
+< HTTP/2 200
+< content-type: text/html; charset=utf-8
+< content-length: 60
+< server: istio-envoy
+< date: Fri, 02 Dec 2022 01:20:51 GMT
+< x-envoy-upstream-service-time: 113
+<
+Hello version: v1, instance: helloworld-v1-5f44dd8565-zplmv
+* Connection #0 to host helloworld-v1.example.com left intact
+```
+
+
+
 向httpbin.example.com发起访问
 
 ```bash
@@ -3469,6 +3558,31 @@ curl -v -HHost:httpbin.example.com --resolve "httpbin.example.com:$SECURE_INGRES
 ```
 
 ​    此处还是有茶壶
+
+
+
+```bash
+< HTTP/2 418
+< server: istio-envoy
+< date: Fri, 02 Dec 2022 01:21:55 GMT
+< access-control-allow-credentials: true
+< x-more-info: http://tools.ietf.org/html/rfc2324
+< access-control-allow-origin: *
+< content-length: 135
+< x-envoy-upstream-service-time: 3
+<
+
+    -=[ teapot ]=-
+
+       _...._
+     .'  _ _ `.
+    | ."` ^ `". _,
+    \_;`"---"`|//
+      |       ;/
+      \_     _/
+        `"""`
+* Connection #0 to host httpbin.example.com left intact
+```
 
 
 
@@ -3484,10 +3598,40 @@ kubectl create -n istio-system secret generic httpbin-credential --from-file=tls
 
 
 
-把mygateway切换到mutual模式
+把mygateway切换到`mutual`模式
 
 ```bash
 kubectl apply -f istiolabmanual/mygatewayv2.yaml
+```
+
+
+
+查看gateway配置文件
+
+```bash
+nano istiolabmanual/mygatewayv2.yaml
+```
+
+
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+ name: mygateway
+spec:
+ selector:
+   istio: ingressgateway # use istio default ingress gateway
+ servers:
+ - port:
+     number: 443
+     name: https
+     protocol: HTTPS
+   tls:
+     mode: MUTUAL
+     credentialName: httpbin-credential # must be the same as secret
+   hosts:
+   - httpbin.example.com
 ```
 
 
@@ -3500,6 +3644,48 @@ curl -v -HHost:httpbin.example.com --resolve "httpbin.example.com:$SECURE_INGRES
 ```
 
 ​    吃瘪
+
+```bash
+root@node1:~/istio-1.16.0# curl -v -HHost:httpbin.example.com --resolve "httpbin.example.com:$SECURE_INGRESS_PORT:$INGRESS_HOST" \
+> --cacert example.com.crt "https://httpbin.example.com:$SECURE_INGRESS_PORT/status/418"
+* Added httpbin.example.com:32696:192.168.1.233 to DNS cache
+* Hostname httpbin.example.com was found in DNS cache
+*   Trying 192.168.1.233:32696...
+* TCP_NODELAY set
+* Connected to httpbin.example.com (192.168.1.233) port 32696 (#0)
+* ALPN, offering h2
+* ALPN, offering http/1.1
+* successfully set certificate verify locations:
+*   CAfile: example.com.crt
+  CApath: /etc/ssl/certs
+* TLSv1.3 (OUT), TLS handshake, Client hello (1):
+* TLSv1.3 (IN), TLS handshake, Server hello (2):
+* TLSv1.3 (IN), TLS handshake, Encrypted Extensions (8):
+* TLSv1.3 (IN), TLS handshake, Request CERT (13):
+* TLSv1.3 (IN), TLS handshake, Certificate (11):
+* TLSv1.3 (IN), TLS handshake, CERT verify (15):
+* TLSv1.3 (IN), TLS handshake, Finished (20):
+* TLSv1.3 (OUT), TLS change cipher, Change cipher spec (1):
+* TLSv1.3 (OUT), TLS handshake, Certificate (11):
+* TLSv1.3 (OUT), TLS handshake, Finished (20):
+* SSL connection using TLSv1.3 / TLS_AES_256_GCM_SHA384
+* ALPN, server accepted to use h2
+* Server certificate:
+*  subject: CN=httpbin.example.com; O=httpbin organization
+*  start date: Dec  2 01:06:59 2022 GMT
+*  expire date: Dec  2 01:06:59 2023 GMT
+*  common name: httpbin.example.com (matched)
+*  issuer: O=example Inc.; CN=example.com
+*  SSL certificate verify ok.
+* Using HTTP2, server supports multi-use
+* Connection state changed (HTTP/2 confirmed)
+* Copying HTTP/2 data in stream buffer to connection buffer after upgrade: len=0
+* OpenSSL SSL_write: Broken pipe, errno 32
+* Failed sending HTTP2 data
+* nghttp2_session_send() failed: The user callback function failed(-902)
+* Connection #0 to host httpbin.example.com left intact
+curl: (16) OpenSSL SSL_write: Broken pipe, errno 32
+```
 
 
 
@@ -3521,6 +3707,79 @@ curl -v -HHost:httpbin.example.com --resolve "httpbin.example.com:$SECURE_INGRES
 ```
 
 ​    此处还是有茶壶
+
+
+
+```bash
+root@node1:~/istio-1.16.0# curl -v -HHost:httpbin.example.com --resolve "httpbin.example.com:$SECURE_INGRESS_PORT:$INGRESS_HOST" \
+> --cacert example.com.crt --cert client.example.com.crt --key client.example.com.key \
+> "https://httpbin.example.com:$SECURE_INGRESS_PORT/status/418"
+* Added httpbin.example.com:32696:192.168.1.233 to DNS cache
+* Hostname httpbin.example.com was found in DNS cache
+*   Trying 192.168.1.233:32696...
+* TCP_NODELAY set
+* Connected to httpbin.example.com (192.168.1.233) port 32696 (#0)
+* ALPN, offering h2
+* ALPN, offering http/1.1
+* successfully set certificate verify locations:
+*   CAfile: example.com.crt
+  CApath: /etc/ssl/certs
+* TLSv1.3 (OUT), TLS handshake, Client hello (1):
+* TLSv1.3 (IN), TLS handshake, Server hello (2):
+* TLSv1.3 (IN), TLS handshake, Encrypted Extensions (8):
+* TLSv1.3 (IN), TLS handshake, Request CERT (13):
+* TLSv1.3 (IN), TLS handshake, Certificate (11):
+* TLSv1.3 (IN), TLS handshake, CERT verify (15):
+* TLSv1.3 (IN), TLS handshake, Finished (20):
+* TLSv1.3 (OUT), TLS change cipher, Change cipher spec (1):
+* TLSv1.3 (OUT), TLS handshake, Certificate (11):
+* TLSv1.3 (OUT), TLS handshake, CERT verify (15):
+* TLSv1.3 (OUT), TLS handshake, Finished (20):
+* SSL connection using TLSv1.3 / TLS_AES_256_GCM_SHA384
+* ALPN, server accepted to use h2
+* Server certificate:
+*  subject: CN=httpbin.example.com; O=httpbin organization
+*  start date: Dec  2 01:06:59 2022 GMT
+*  expire date: Dec  2 01:06:59 2023 GMT
+*  common name: httpbin.example.com (matched)
+*  issuer: O=example Inc.; CN=example.com
+*  SSL certificate verify ok.
+* Using HTTP2, server supports multi-use
+* Connection state changed (HTTP/2 confirmed)
+* Copying HTTP/2 data in stream buffer to connection buffer after upgrade: len=0
+* Using Stream ID: 1 (easy handle 0x563d03e87e30)
+> GET /status/418 HTTP/2
+> Host:httpbin.example.com
+> user-agent: curl/7.68.0
+> accept: */*
+>
+* TLSv1.3 (IN), TLS handshake, Newsession Ticket (4):
+* TLSv1.3 (IN), TLS handshake, Newsession Ticket (4):
+* old SSL session ID is stale, removing
+* Connection state changed (MAX_CONCURRENT_STREAMS == 2147483647)!
+< HTTP/2 418
+< server: istio-envoy
+< date: Fri, 02 Dec 2022 01:27:09 GMT
+< access-control-allow-credentials: true
+< x-more-info: http://tools.ietf.org/html/rfc2324
+< access-control-allow-origin: *
+< content-length: 135
+< x-envoy-upstream-service-time: 1
+<
+
+    -=[ teapot ]=-
+
+       _...._
+     .'  _ _ `.
+    | ."` ^ `". _,
+    \_;`"---"`|//
+      |       ;/
+      \_     _/
+        `"""`
+* Connection #0 to host httpbin.example.com left intact
+```
+
+对比此前的握手验证过程,这一次明显增多
 
 
 
@@ -3546,6 +3805,14 @@ kubectl delete service --ignore-not-found=true httpbin helloworld-v1
 
 
 # Lab 7 认证：为应用生成双向TLS
+
+可选,重新声明istioctl路径
+
+```bash
+  export PATH=$PWD/bin:$PATH
+```
+
+
 
 创建两个名称空间foo和bar，并在它们两个上部署httpbin 和 sleep 并启用sidecar注入：
 
@@ -3578,6 +3845,16 @@ for from in "foo" "bar" "legacy"; do for to in "foo" "bar"; do kubectl exec $(ku
 
   两两互通，和谐
 
+```bash
+root@node1:~/istio-1.16.0# for from in "foo" "bar" "legacy"; do for to in "foo" "bar"; do kubectl exec $(kubectl get pod -l app=sleep -n ${from} -o jsonpath={.items..metadata.name}) -c sleep -n ${from} -- curl http://httpbin.${to}:8000/ip -s -o /dev/null -w "sleep.${from} to httpbin.${to}: %{http_code}\n"; done; done
+sleep.foo to httpbin.foo: 200
+sleep.foo to httpbin.bar: 200
+sleep.bar to httpbin.foo: 200
+sleep.bar to httpbin.bar: 200
+sleep.legacy to httpbin.foo: 200
+sleep.legacy to httpbin.bar: 200
+```
+
 
 
 检查authentication policies 和 destination rules
@@ -3590,10 +3867,44 @@ kubectl get destinationrule --all-namespaces
 
 
 
+```bash
+root@node1:~/istio-1.16.0# kubectl get peerauthentication --all-namespaces
+No resources found
+root@node1:~/istio-1.16.0#
+root@node1:~/istio-1.16.0# kubectl get destinationrule --all-namespaces
+NAMESPACE   NAME          HOST          AGE
+default     details       details       18h
+default     productpage   productpage   18h
+default     ratings       ratings       18h
+default     reviews       reviews       18h
+```
+
+
+
 在整个网格上启用PERMISSIVE模式的认证策略
 
 ```bash
 kubectl apply -n istio-system -f istiolabmanual/mtlspermissive.yaml 
+```
+
+
+
+查看认证策略配置文件
+
+```bash
+nano istiolabmanual/mtlspermissive.yaml
+```
+
+
+
+```yaml
+apiVersion: "security.istio.io/v1beta1"
+kind: "PeerAuthentication"
+metadata:
+  name: "default"
+spec:
+  mtls:
+    mode: PERMISSIVE
 ```
 
 
@@ -3608,10 +3919,42 @@ for from in "foo" "bar" "legacy"; do for to in "foo" "bar"; do kubectl exec $(ku
 
 
 
+```bash
+root@node1:~/istio-1.16.0# for from in "foo" "bar" "legacy"; do for to in "foo" "bar"; do kubectl exec $(kubectl get pod -l app=sleep -n ${from} -o jsonpath={.items..metadata.name}) -c sleep -n ${from} -- curl http://httpbin.${to}:8000/ip -s -o /dev/null -w "sleep.${from} to httpbin.${to}: %{http_code}\n"; done; done
+sleep.foo to httpbin.foo: 200
+sleep.foo to httpbin.bar: 200
+sleep.bar to httpbin.foo: 200
+sleep.bar to httpbin.bar: 200
+sleep.legacy to httpbin.foo: 200
+sleep.legacy to httpbin.bar: 200
+```
+
+
+
 在整个网格上启用STRICT模式的认证策略
 
 ```bash
 kubectl  apply -n istio-system -f istiolabmanual/mtlsstrict.yaml 
+```
+
+
+
+查看认证策略配置文件
+
+```bash
+nano istiolabmanual/mtlsstrict.yaml
+```
+
+
+
+```yaml
+apiVersion: "security.istio.io/v1beta1"
+kind: "PeerAuthentication"
+metadata:
+  name: "default"
+spec:
+  mtls:
+    mode: STRICT
 ```
 
 
@@ -3626,11 +3969,42 @@ for from in "foo" "bar" "legacy"; do for to in "foo" "bar"; do kubectl exec $(ku
 
 
 
+```bash
+root@node1:~/istio-1.16.0# for from in "foo" "bar" "legacy"; do for to in "foo" "bar"; do kubectl exec $(kubectl get pod -l app=sleep -n ${from} -o jsonpath={.items..metadata.name}) -c sleep -n ${from} -- curl http://httpbin.${to}:8000/ip -s -o /dev/null -w "sleep.${from} to httpbin.${to}: %{http_code}\n"; done; done
+sleep.foo to httpbin.foo: 200
+sleep.foo to httpbin.bar: 200
+sleep.bar to httpbin.foo: 200
+sleep.bar to httpbin.bar: 200
+sleep.legacy to httpbin.foo: 000
+command terminated with exit code 56
+sleep.legacy to httpbin.bar: 000
+command terminated with exit code 56
+```
+
+
+
 重建legacy 名称空间的服务，请启用sidecar注入
 
 ```bash
 kubectl apply -f <(istioctl kube-inject -f samples/httpbin/httpbin.yaml) -n legacy
 kubectl apply -f <(istioctl kube-inject -f samples/sleep/sleep.yaml) -n legacy
+```
+
+
+
+查看legacy 名称空间pod重建情况
+
+```bash
+kubectl get pod -n legacy
+```
+
+
+
+```bash
+root@node1:~/istio-1.16.0# kubectl get pod -n legacy
+NAME                      READY   STATUS    RESTARTS   AGE
+httpbin-dddb978d5-wg7pq   2/2     Running   0          26s
+sleep-7786869f6c-56q75    2/2     Running   0          24s
 ```
 
 
@@ -3642,6 +4016,34 @@ for from in "foo" "bar" "legacy"; do for to in "foo" "bar"; do kubectl exec $(ku
 ```
 
   注入sidecar之后，legacy又可以和小伙伴们一起玩耍了
+
+
+
+```bash
+root@node1:~/istio-1.16.0# for from in "foo" "bar" "legacy"; do for to in "foo" "bar"; do kubectl exec $(kubectl get pod -l app=sleep -n ${from} -o jsonpath={.items..metadata.name}) -c sleep -n ${from} -- curl http://httpbin.${to}:8000/ip -s -o /dev/null -w "sleep.${from} to httpbin.${to}: %{http_code}\n"; done; done
+sleep.foo to httpbin.foo: 200
+sleep.foo to httpbin.bar: 200
+sleep.bar to httpbin.foo: 200
+sleep.bar to httpbin.bar: 200
+sleep.legacy to httpbin.foo: 200
+sleep.legacy to httpbin.bar: 200
+```
+
+
+
+查看验证策略
+
+```bash
+kubectl get peerauthentication --all-namespaces
+```
+
+
+
+```bash
+root@node1:~/istio-1.16.0# kubectl get peerauthentication --all-namespaces
+NAMESPACE      NAME      MODE     AGE
+istio-system   default   STRICT   6m22s
+```
 
 
 
