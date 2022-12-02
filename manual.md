@@ -4233,18 +4233,55 @@ kubectl delete namespace foo
 
 # Lab 9 监控
 
+## 日志
+
 模拟一次页面访问,为了防止被不必要的katacode页面元素“污染“，我们最好从内部用命令行执行一次curl访问
 
 ```bash
 kubectl get svc
 
-curl http://10.109.209.72:9080/productpage
+curl http://10.108.91.118:9080/productpage
+```
+
+
+
+```bash
+root@node1:~# kubectl get svc
+NAME          TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+details       ClusterIP   10.97.72.135    <none>        9080/TCP   19h
+kubernetes    ClusterIP   10.96.0.1       <none>        443/TCP    222d
+productpage   ClusterIP   10.108.91.118   <none>        9080/TCP   19h
+ratings       ClusterIP   10.96.212.103   <none>        9080/TCP   19h
+reviews       ClusterIP   10.102.110.0    <none>        9080/TCP   19h
+root@node1:~# curl http://10.108.91.118:9080/productpage
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Simple Bookstore App</title>
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- Latest compiled and minified CSS -->
+<link rel="stylesheet" href="static/bootstrap/css/bootstrap.min.css">
+
+<!-- Optional theme -->
+<link rel="stylesheet" href="static/bootstrap/css/bootstrap-theme.min.css">
+
+  </head>
+  <body>
+...
 ```
 
 
 
 查看istio proxy日志
+
+```
 kubectl get pods
+```
+
+
 
 ```bash
 kubectl logs -f productpage-xxx istio-proxy
@@ -4254,11 +4291,17 @@ kubectl logs -f productpage-xxx istio-proxy
 
 观察到两个outbond条目，分别指向details和reviews，还有一个inbound条目，指向productpage
 
+```bash
+2022-12-01T07:08:05.712268Z     info    xdsproxy        connected to upstream XDS server: istiod.istio-system.svc:15012
+[2022-12-02T02:36:05.715Z] "GET /details/0 HTTP/1.1" 200 - via_upstream - "-" 0 178 2 2 "-" "curl/7.68.0" "7b923129-a124-9cf9-9c32-8fbe97cb3f57" "details:9080" "10.244.135.8:9080" outbound|9080||details.default.svc.cluster.local 10.244.135.11:49730 10.97.72.135:9080 10.244.135.11:34060 - default
+[2022-12-02T02:36:05.721Z] "GET /reviews/0 HTTP/1.1" 200 - via_upstream - "-" 0 438 791 791 "-" "curl/7.68.0" "7b923129-a124-9cf9-9c32-8fbe97cb3f57" "reviews:9080" "10.244.104.11:9080" outbound|9080||reviews.default.svc.cluster.local 10.244.135.11:48624 10.102.110.0:9080 10.244.135.11:47568 - default
+```
+
 
 
 为获取更多信息，设置日志以JSON格式显式
 
-```json
+```bash
 istioctl manifest apply --set profile=demo --set values.meshConfig.accessLogFile="/dev/stdout" --set values.meshConfig.accessLogEncoding=JSON
 ```
 
@@ -4270,11 +4313,34 @@ istioctl manifest apply --set profile=demo --set values.meshConfig.accessLogFile
 kubectl describe configmap istio -n istio-system | less
 ```
 
+
+
 配置文件有以下输出
 
-```json
-  accessLogEncoding: JSON
-  accessLogFile: /dev/stdout
+```bash
+Data
+====
+mesh:
+----
+accessLogEncoding: JSON #格式
+accessLogFile: /dev/stdout #日志输入位置
+defaultConfig:
+  discoveryAddress: istiod.istio-system.svc:15012
+  proxyMetadata: {}
+  tracing:
+    zipkin:
+      address: zipkin.istio-system:9411
+enablePrometheusMerge: true
+extensionProviders:
+- envoyOtelAls:
+    port: 4317
+    service: opentelemetry-collector.istio-system.svc.cluster.local
+  name: otel
+rootNamespace: istio-system
+trustDomain: cluster.local
+meshNetworks:
+----
+networks: {}
 ```
 
 
@@ -4289,7 +4355,7 @@ kubectl logs -f productpage-xxx istio-proxy
 
 分别指向details和reviews 的outbound条目
 
-```json
+```bash
 {"downstream_remote_address":"10.40.0.12:41654","authority":"details:9080","path":"/details/0","protocol":"HTTP/1.1","upstream_service_time":"9","upstream_local_address":"10.40.0.12:48508","duration":"15","upstream_transport_failure_reason":"-","route_name":"default","downstream_local_address":"10.99.18.67:9080","user_agent":"curl/7.47.0","response_code":"200","response_flags":"-","start_time":"2020-05-15T06:30:26.459Z","method":"GET","request_id":"e2de9f03-38ac-924d-ae2b-176d868c56ab","upstream_host":"10.40.0.8:9080","x_forwarded_for":"-","requested_server_name":"-","bytes_received":"0","istio_policy_status":"-","bytes_sent":"178","upstream_cluster":"outbound|9080||details.default.svc.cluster.local"}
 
 {"upstream_cluster":"outbound|9080||reviews.default.svc.cluster.local","downstream_remote_address":"10.40.0.12:43866","authority":"reviews:9080","path":"/reviews/0","protocol":"HTTP/1.1","upstream_service_time":"1786","upstream_local_address":"10.40.0.12:36048","duration":"1787","upstream_transport_failure_reason":"-","route_name":"default","downstream_local_address":"10.98.163.167:9080","user_agent":"curl/7.47.0","response_code":"200","response_flags":"-","start_time":"2020-05-15T06:30:26.480Z","method":"GET","request_id":"e2de9f03-38ac-924d-ae2b-176d868c56ab","upstream_host":"10.40.0.11:9080","x_forwarded_for":"-","requested_server_name":"-","bytes_received":"0","istio_policy_status":"-","bytes_sent":"379"}
@@ -4297,7 +4363,7 @@ kubectl logs -f productpage-xxx istio-proxy
 
 指向productpage的inbound条目
 
-```json
+```bash
 {"upstream_cluster":"inbound|9080|http|productpage.default.svc.cluster.local","downstream_remote_address":"10.32.0.1:40938","authority":"10.109.209.72:9080","path":"/productpage","protocol":"HTTP/1.1","upstream_service_time":"1839","upstream_local_address":"127.0.0.1:51264","duration":"1840","upstream_transport_failure_reason":"-","route_name":"default","downstream_local_address":"10.40.0.12:9080","user_agent":"curl/7.47.0","response_code":"200","response_flags":"-","start_time":"2020-05-15T06:30:26.446Z","method":"GET","request_id":"e2de9f03-38ac-924d-ae2b-176d868c56ab","upstream_host":"127.0.0.1:9080","x_forwarded_for":"-","requested_server_name":"-","bytes_received":"0","istio_policy_status":"-","bytes_sent":"5183"}
 ```
 
@@ -4305,7 +4371,7 @@ kubectl logs -f productpage-xxx istio-proxy
 
 使用JSON Handler查看详细日志尤其是五元组信息和Flag
 
-```json
+```bash
 `"outbound|9080||details.default.svc.cluster.local"`
 
 `"outbound|9080||reviews.default.svc.cluster.local"`
@@ -4314,6 +4380,8 @@ kubectl logs -f productpage-xxx istio-proxy
 ```
 
 
+
+## 指标和可视化
 
 安装仪表板： 
 
@@ -4362,6 +4430,8 @@ kiali: [http://node1:31123/](http://node1:31123/)
 
 操作过程可参见
 https://zhuanlan.zhihu.com/p/141775176 
+
+## 分部式追踪
 
 
 
