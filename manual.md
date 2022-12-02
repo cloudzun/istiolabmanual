@@ -4233,7 +4233,7 @@ kubectl delete namespace foo
 
 # Lab 9 监控
 
-## 日志
+## 1.日志
 
 模拟一次页面访问,为了防止被不必要的katacode页面元素“污染“，我们最好从内部用命令行执行一次curl访问
 
@@ -4381,7 +4381,7 @@ kubectl logs -f productpage-xxx istio-proxy
 
 
 
-## 指标和可视化
+## 2.指标和可视化
 
 安装仪表板： 
 
@@ -4409,29 +4409,186 @@ kubectl patch service kiali --namespace=istio-system --type='json' --patch='[{"o
 
 
 
-压测脚本
-
-```
-while true; do curl http://node3:30329/productpage; done  
-```
-
-
-
 仪表板组件打开方式
-prometheus: [http://node1:31120/]( http://node1:31120/)
 
-grafana: [http://node1:31121/](http://node1:31121/)
+- prometheus: [http://node1:31120/]( http://node1:31120/)
+- grafana: [http://node1:31121/](http://node1:31121/)
 
-tracing: [http://node1:31122/]( http://node1:31122/)
+- tracing: [http://node1:31122/]( http://node1:31122/)
 
-kiali: [http://node1:31123/](http://node1:31123/)
+- kiali: [http://node1:31123/
 
 
 
-操作过程可参见
-https://zhuanlan.zhihu.com/p/141775176 
+查看ingress gateway的端口号
 
-## 分部式追踪
+```bash
+ kubectl get svc -n istio-system | grep ingress
+```
+
+
+
+```bash
+root@node1:~/istio-1.16.0# kubectl get svc -n istio-system | grep ingress
+istio-ingressgateway   LoadBalancer   10.105.85.107    <pending>     15021:31215/TCP,80:30193/TCP,443:32696/TCP,31400:30573/TCP,15443:30572/TCP   23h
+```
+
+
+
+在另外一个窗口执行压测脚本
+
+```
+while true; do curl http://node3:30193/productpage; done  
+```
+
+
+
+查看Prometheus监控指标:服务指标
+
+![image-20221202142137147](manual.assets/image-20221202142137147.png)
+
+
+
+查看Prometheus监控指标: Envoy 代理指标
+
+![image-20221202142211924](manual.assets/image-20221202142211924.png)
+
+
+
+查看Prometheus监控指标: 控制平面指标,Status：runtime and build
+
+
+
+![image-20221202142308737](manual.assets/image-20221202142308737.png)
+
+
+
+查看Prometheus监控指标:  Status：configuration
+
+![image-20221202142349481](manual.assets/image-20221202142349481.png)
+
+
+
+使用Grafana查看系统整体状态
+
+打开Grafana页面，从报表列表中可以看到istio相关的报表，这里最关键的两个报表分别是
+
+- 查看应用（服务）数据的Mesh Dashboard
+- 查看Istio 自身（各组件）数据的Performance Dashboard
+
+
+
+![image-20221202142627379](manual.assets/image-20221202142627379.png)
+
+
+
+打开mesh dashboard我们可以观察到网格数据总览
+
+![image-20221202142734251](manual.assets/image-20221202142734251.png)
+
+
+
+
+
+如果需要查看应用层面信息可以从service列表下面进行选择进入相关的服务视图（Service Dashboard）
+
+![image-20221202143001982](manual.assets/image-20221202143001982.png)
+
+
+
+如果需要查看部署层面信息可以从workload列表下面进行选择进入相关的工作负载（workload dashboard）视图
+
+![image-20221202143139584](manual.assets/image-20221202143139584.png)
+
+
+
+打开Performance Dashboard可以查看Istio 自身以及各个组件的数据
+
+Istio 系统总览
+
+![image-20221202143301597](manual.assets/image-20221202143301597.png)
+
+
+
+控制平面视图
+
+![image-20221202143555608](manual.assets/image-20221202143555608.png)
+
+
+
+## 3.查看应用拓扑信息
+
+Overview界面
+
+![image-20221202144107999](manual.assets/image-20221202144107999.png)
+
+
+
+
+
+Graph页面：查看应用拓扑
+
+![image-20221202144342898](manual.assets/image-20221202144342898.png)
+
+
+
+尝试选择不同的构图和指标查看拓扑信息，比如在下图中可以观察流量在不同版本的reviews服务之间的分配及延时参数
+
+![image-20221202144534745](manual.assets/image-20221202144534745.png)
+
+
+
+Application以拓扑和出入站流量为监控核心
+
+![image-20221202144817611](manual.assets/image-20221202144817611.png)
+
+
+
+Service：侧重观察服务定义
+
+![image-20221202144947810](manual.assets/image-20221202144947810.png)
+
+
+
+Workload： 侧重观察部署和基础架构：
+
+![image-20221202145126393](manual.assets/image-20221202145126393.png)
+
+
+
+
+
+## 4.分布式追踪
+
+在Jeager页面中，从search中选择服务和相关的参数
+
+![image-20221202145440346](manual.assets/image-20221202145440346.png)
+
+
+
+从右侧选择一个trace进行分析，（建议选择饱满一点的，比如有8个span）
+
+![image-20221202145554461](manual.assets/image-20221202145554461.png)
+
+
+
+
+
+对比bookinfo的访问过程进行访问链的调查
+
+![image-20221202145727546](manual.assets/image-20221202145727546.png)
+
+展开某个span查看访问过程，可以看到envoy日志中的关键信息 比如response_flag quest-id和无元组信息
+
+![image-20221202145824316](manual.assets/image-20221202145824316.png)
+
+
+
+亦可使用Trace Graph方式查看
+
+![image-20221202145921407](manual.assets/image-20221202145921407.png)
+
+
 
 
 
