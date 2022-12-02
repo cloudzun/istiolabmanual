@@ -1345,7 +1345,7 @@ kubectl exec -it $SOURCE_POD -c sleep -- curl http://httpbin.org/headers
 
 
 
-```json
+```bash
 root@node1:~/istio-1.16.0# kubectl exec -it $SOURCE_POD -c sleep -- curl http://httpbin.org/headers
 {
   "headers": {
@@ -3142,10 +3142,73 @@ kubectl apply -f istiolabmanual/sdsgateway.yaml
 
 
 
+查看gateway配置文件
+
+```bash
+nano istiolabmanual/sdsgateway.yaml
+```
+
+
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: mygateway
+spec:
+  selector:
+    istio: ingressgateway # use istio default ingress gateway
+  servers:
+  - port:
+      number: 443
+      name: https
+      protocol: HTTPS
+    tls:
+      mode: SIMPLE
+      credentialName: httpbin-credential # must be the same as secret
+    hosts:
+    - httpbin.example.com
+```
+
+
+
 配置网关的ingress traffic routes 定义相应的虚拟服务
 
 ```bash
 kubectl apply -f istiolabmanual/sdsvirtualserver.yaml 
+```
+
+
+
+查看virtual server配置文件
+
+```bash
+nano istiolabmanual/sdsvirtualserver.yaml 
+```
+
+
+
+```yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: httpbin
+spec:
+  hosts:
+  - "httpbin.example.com"
+  gateways:
+  - mygateway
+  http:
+  - match:
+    - uri:
+        prefix: /status
+    - uri:
+        prefix: /delay
+    route:
+    - destination:
+        port:
+          number: 8000
+        host: httpbin
 ```
 
 
@@ -3170,7 +3233,70 @@ curl -v -HHost:httpbin.example.com --resolve "httpbin.example.com:$SECURE_INGRES
 
 ​    此处应该有茶壶
 
+```bash
+root@node1:~/istio-1.16.0# curl -v -HHost:httpbin.example.com --resolve "httpbin.example.com:$SECURE_INGRESS_PORT:$INGRESS_HOST" \
+> --cacert example.com.crt "https://httpbin.example.com:$SECURE_INGRESS_PORT/status/418"
+* Added httpbin.example.com:32696:192.168.1.233 to DNS cache
+* Hostname httpbin.example.com was found in DNS cache
+*   Trying 192.168.1.233:32696...
+* TCP_NODELAY set
+* Connected to httpbin.example.com (192.168.1.233) port 32696 (#0)
+* ALPN, offering h2
+* ALPN, offering http/1.1
+* successfully set certificate verify locations:
+*   CAfile: example.com.crt
+  CApath: /etc/ssl/certs
+* TLSv1.3 (OUT), TLS handshake, Client hello (1):
+* TLSv1.3 (IN), TLS handshake, Server hello (2):
+* TLSv1.3 (IN), TLS handshake, Encrypted Extensions (8):
+* TLSv1.3 (IN), TLS handshake, Certificate (11):
+* TLSv1.3 (IN), TLS handshake, CERT verify (15):
+* TLSv1.3 (IN), TLS handshake, Finished (20):
+* TLSv1.3 (OUT), TLS change cipher, Change cipher spec (1):
+* TLSv1.3 (OUT), TLS handshake, Finished (20):
+* SSL connection using TLSv1.3 / TLS_AES_256_GCM_SHA384
+* ALPN, server accepted to use h2
+* Server certificate:
+*  subject: CN=httpbin.example.com; O=httpbin organization
+*  start date: Dec  2 01:06:59 2022 GMT
+*  expire date: Dec  2 01:06:59 2023 GMT
+*  common name: httpbin.example.com (matched)
+*  issuer: O=example Inc.; CN=example.com
+*  SSL certificate verify ok.
+* Using HTTP2, server supports multi-use
+* Connection state changed (HTTP/2 confirmed)
+* Copying HTTP/2 data in stream buffer to connection buffer after upgrade: len=0
+* Using Stream ID: 1 (easy handle 0x562ada683e30)
+> GET /status/418 HTTP/2
+> Host:httpbin.example.com
+> user-agent: curl/7.68.0
+> accept: */*
+>
+* TLSv1.3 (IN), TLS handshake, Newsession Ticket (4):
+* TLSv1.3 (IN), TLS handshake, Newsession Ticket (4):
+* old SSL session ID is stale, removing
+* Connection state changed (MAX_CONCURRENT_STREAMS == 2147483647)!
+< HTTP/2 418
+< server: istio-envoy
+< date: Fri, 02 Dec 2022 01:13:11 GMT
+< access-control-allow-credentials: true
+< x-more-info: http://tools.ietf.org/html/rfc2324
+< access-control-allow-origin: *
+< content-length: 135
+< x-envoy-upstream-service-time: 18
+<
 
+    -=[ teapot ]=-
+
+       _...._
+     .'  _ _ `.
+    | ."` ^ `". _,
+    \_;`"---"`|//
+      |       ;/
+      \_     _/
+        `"""`
+* Connection #0 to host httpbin.example.com left intact
+```
 
 回滚日志查看 TSL 握手过程
 
@@ -3207,6 +3333,31 @@ curl -v -HHost:httpbin.example.com --resolve "httpbin.example.com:$SECURE_INGRES
 
 
 
+```bash
+< HTTP/2 418
+< server: istio-envoy
+< date: Fri, 02 Dec 2022 01:14:48 GMT
+< access-control-allow-credentials: true
+< x-more-info: http://tools.ietf.org/html/rfc2324
+< access-control-allow-origin: *
+< content-length: 135
+< x-envoy-upstream-service-time: 8
+<
+
+    -=[ teapot ]=-
+
+       _...._
+     .'  _ _ `.
+    | ."` ^ `". _,
+    \_;`"---"`|//
+      |       ;/
+      \_     _/
+        `"""`
+* Connection #0 to host httpbin.example.com left intact
+```
+
+
+
 尝试使用旧证书访问
 
 ```bash
@@ -3215,6 +3366,33 @@ curl -v -HHost:httpbin.example.com --resolve "httpbin.example.com:$SECURE_INGRES
 ```
 
 ​    吃瘪
+
+
+
+```bash
+root@node1:~/istio-1.16.0# curl -v -HHost:httpbin.example.com --resolve "httpbin.example.com:$SECURE_INGRESS_PORT:$INGRESS_HOST" \
+> --cacert example.com.crt "https://httpbin.example.com:$SECURE_INGRESS_PORT/status/418"
+* Added httpbin.example.com:32696:192.168.1.233 to DNS cache
+* Hostname httpbin.example.com was found in DNS cache
+*   Trying 192.168.1.233:32696...
+* TCP_NODELAY set
+* Connected to httpbin.example.com (192.168.1.233) port 32696 (#0)
+* ALPN, offering h2
+* ALPN, offering http/1.1
+* successfully set certificate verify locations:
+*   CAfile: example.com.crt
+  CApath: /etc/ssl/certs
+* TLSv1.3 (OUT), TLS handshake, Client hello (1):
+* TLSv1.3 (IN), TLS handshake, Server hello (2):
+* TLSv1.3 (IN), TLS handshake, Encrypted Extensions (8):
+* TLSv1.3 (IN), TLS handshake, Certificate (11):
+* TLSv1.3 (OUT), TLS alert, decrypt error (563):
+* error:0407008A:rsa routines:RSA_padding_check_PKCS1_type_1:invalid padding
+* Closing connection 0
+curl: (35) error:0407008A:rsa routines:RSA_padding_check_PKCS1_type_1:invalid padding
+```
+
+
 
 
 
@@ -3699,9 +3877,9 @@ https://zhuanlan.zhihu.com/p/141775176
 
 # 备注
 
-## 国内安装可选方法
+## 国内安装方法
 
-如果直接下载istio失败，可以使用这个步骤下载1.16.0介质进行安装：
+如果直接下载istio失败，可以使用这个步骤下载1.16.0安装包并解压：
 
 ```bash
 wget https://chengzhstor.blob.core.windows.net/k8slab/istio-1.16.0-linux-amd64.tar.gz
